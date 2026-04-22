@@ -1,0 +1,35 @@
+# PrepperPi boot-partition overrides.
+#
+# Drop this file at /boot/firmware/prepperpi.conf on the SD card.
+# Lines starting with '#' are ignored; keys are KEY=value with no spaces
+# around the '='. The default for every key is shown commented-out.
+
+# ----- Wi-Fi access point -----
+
+# Override the auto-generated SSID. Default: PrepperPi-<last-4-hex-of-MAC>.
+#SSID=PrepperPi-FIELD
+
+# Set a WPA2 passphrase (8-63 printable ASCII). Omit or leave blank for
+# an open network (the commercial-product default). The admin console
+# can also change this later.
+#WIFI_PASSWORD=
+
+# Regulatory domain. Must be your two-letter ISO 3166-1 country code,
+# or hostapd will refuse to start. US / GB / DE / AU / CA / JP etc.
+#COUNTRY=US
+
+# Force a specific 2.4 GHz channel (1, 6, or 11 are the non-overlapping
+# North American choices). Default: auto — prepperpi-ap-pick-channel picks
+# the least-busy one from {1,6,11} at boot.
+#CHANNEL=auto
+
+# Maximum associated clients advertised by hostapd. Defaults: 10 on the
+# Pi 4B, 20 on the Pi 5. The Pi's onboard Wi-Fi can struggle beyond these.
+#MAX_STA=10
+
+# Wi-Fi interface. Almost always wlan0 on the Pi 4B/5.
+#INTERFACE=wlan0
+
+# ----- Locale / timezone (placeholders for later stories) -----
+#TIMEZONE=UTC
+#LOCALE=en_US.UTF-8

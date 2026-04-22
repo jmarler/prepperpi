@@ -1,0 +1,9 @@
+[Unit]
+Description=PrepperPi — Wi-Fi access point bundle
+Documentation=https://github.com/jmarler/prepperpi
+Requires=prepperpi-ap-configure.service
+Wants=hostapd.service dnsmasq.service
+After=prepperpi-ap-configure.service hostapd.service dnsmasq.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,50 @@
+# PrepperPi — hostapd config template.
+#
+# Generated from services/prepperpi-ap/hostapd.conf.tmpl by
+# prepperpi-ap-configure.service on every boot.
+# Placeholders of the form @NAME@ are substituted at runtime.
+# Do not edit the deployed file at /etc/hostapd/hostapd.conf —
+# changes will be overwritten on reboot. Edit /boot/firmware/prepperpi.conf
+# instead (see prepperpi.conf.example).
+
+interface=@INTERFACE@
+driver=nl80211
+
+# SSID derived from last four hex of onboard MAC (overridable).
+ssid=@SSID@
+
+# Regulatory domain controls legal channels and tx power.
+country_code=@COUNTRY@
+ieee80211d=1
+
+# 2.4 GHz 802.11n. Dual-band AP is fragile on the Pi's onboard radio,
+# so v1 ships 2.4 GHz by default; operators who want 5 GHz can edit
+# this file's source template.
+hw_mode=g
+channel=@CHANNEL@
+ieee80211n=1
+wmm_enabled=1
+ht_capab=[HT20][SHORT-GI-20][DSSS_CCK-40]
+
+# How many clients we advertise support for. The Broadcom/Cypress chips
+# on the Pi can comfortably handle ~10 associations on the 4B and ~20
+# on the 5; stretch goals only — real capacity depends on RF environment.
+max_num_sta=@MAX_STA@
+
+# --- Auth ---
+# Rendered as one of:
+#   auth_algs=1
+#   wpa=0                              (open; default)
+# -- or --
+#   auth_algs=1
+#   wpa=2
+#   wpa_key_mgmt=WPA-PSK
+#   rsn_pairwise=CCMP
+#   wpa_passphrase=...
+@AUTH_BLOCK@
+
+# Logging to syslog at INFO level.
+logger_syslog=-1
+logger_syslog_level=2
+logger_stdout=-1
+logger_stdout_level=2
