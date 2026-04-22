@@ -1,0 +1,51 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node / web
+node_modules/
+dist/
+build/
+.parcel-cache/
+
+# Build artifacts
+*.img
+*.img.xz
+*.iso
+*.zim
+*.mbtiles
+
+# Local runtime
+/srv/
+/tmp/
+logs/
+*.log
+
+# Secrets — never commit
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# pi-gen / image build scratch
+/images/work/
+/images/deploy/
