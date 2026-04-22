@@ -1,0 +1,27 @@
+[Unit]
+Description=PrepperPi — render hostapd/dnsmasq config and bring up wlan0
+Documentation=https://github.com/jmarler/prepperpi
+DefaultDependencies=no
+After=local-fs.target systemd-udev-settle.service sys-subsystem-net-devices-wlan0.device NetworkManager.service
+Wants=systemd-udev-settle.service sys-subsystem-net-devices-wlan0.device
+Before=hostapd.service dnsmasq.service network.target
+ConditionPathExists=/sys/class/net/wlan0
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/prepperpi/services/prepperpi-ap/prepperpi-ap-configure.sh
+# Writes /etc/hostapd/hostapd.conf, /etc/dnsmasq.d/prepperpi.conf,
+# /etc/default/hostapd, and /run/prepperpi/ap.state.
+StandardOutput=journal
+StandardError=journal
+
+# Minimal hardening. We need CAP_NET_ADMIN to configure wlan0
+# and file writes to /etc, so we can't sandbox much more than this.
+NoNewPrivileges=yes
+ProtectSystem=no
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

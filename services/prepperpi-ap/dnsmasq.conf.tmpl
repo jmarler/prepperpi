@@ -1,0 +1,31 @@
+# PrepperPi — dnsmasq config (DHCP + captive DNS).
+#
+# Generated from services/prepperpi-ap/dnsmasq.conf.tmpl by
+# prepperpi-ap-configure.service. Do not edit in place.
+
+# Only serve on the AP interface; never clobber the Pi's other NICs.
+interface=@INTERFACE@
+bind-interfaces
+
+# Don't read the host's /etc/resolv.conf — we are authoritative.
+no-resolv
+no-hosts
+
+# DHCP: hand out 10.42.0.50-.250, /24, one-hour lease.
+dhcp-range=10.42.0.50,10.42.0.250,255.255.255.0,1h
+dhcp-option=option:router,10.42.0.1
+dhcp-option=option:dns-server,10.42.0.1
+
+# Captive-portal DNS trick: resolve everything to ourselves. The landing
+# page at 10.42.0.1 then serves either the real content or a "you're
+# offline" notice for any host that isn't a known PrepperPi service.
+address=/#/10.42.0.1
+
+# A friendly local name. Joining clients can hit http://prepperpi.local/.
+local=/prepperpi.local/
+domain=prepperpi.local
+expand-hosts
+
+# Be quiet about the flood of queries phones make when they land.
+log-queries=extra
+log-facility=/var/log/prepperpi/dnsmasq.log
