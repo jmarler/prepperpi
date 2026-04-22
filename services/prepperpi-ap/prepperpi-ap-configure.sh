@@ -157,6 +157,18 @@ pick_channel() {
   printf '%s' "$best"
 }
 
+wlan_rfkill_blocked() {
+  # Returns 0 if any wlan rfkill switch is soft-blocked, 1 otherwise.
+  local sw
+  for sw in /sys/class/rfkill/*; do
+    [[ -r "${sw}/type" ]] || continue
+    if [[ "$(cat "${sw}/type")" == "wlan" ]]; then
+      if [[ "$(cat "${sw}/soft" 2>/dev/null)" == "1" ]]; then return 0; fi
+    fi
+  done
+  return 1
+}
+
 release_radio() {
   # Hand wlan0 over to us: stop anything else managing it, drop any
   # rfkill soft-block (Pi OS Lite ships wlan0 rfkill-blocked until a
@@ -165,14 +177,23 @@ release_radio() {
   local iface="$1" country="$2"
 
   if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    log "handing ${iface} to ourselves (nmcli unmanage)"
     nmcli dev set "$iface" managed no 2>/dev/null || true
+  else
+    log "NetworkManager not active; skipping unmanage"
   fi
   systemctl stop "wpa_supplicant@${iface}.service" 2>/dev/null || true
 
-  if command -v rfkill >/dev/null 2>&1; then
-    rfkill unblock wlan 2>/dev/null || true
-  else
-    # Fallback: poke the sysfs node directly for each wlan rfkill switch.
+  # Unblock rfkill via BOTH the command-line tool (clean path) and a
+  # direct sysfs write (fallback if rfkill isn't installed, or if the
+  # first unblock gets overridden by a daemon that starts between
+  # commands). Loop a few times because NetworkManager can re-block
+  # briefly when it sees the interface transition.
+  local attempt
+  for attempt in 1 2 3 4 5; do
+    if command -v rfkill >/dev/null 2>&1; then
+      rfkill unblock wlan 2>/dev/null || true
+    fi
     local sw
     for sw in /sys/class/rfkill/*; do
       [[ -r "${sw}/type" ]] || continue
@@ -180,6 +201,14 @@ release_radio() {
         printf '0' > "${sw}/soft" 2>/dev/null || true
       fi
     done
+    if ! wlan_rfkill_blocked; then
+      log "wlan rfkill unblocked (attempt ${attempt})"
+      break
+    fi
+    sleep 0.2
+  done
+  if wlan_rfkill_blocked; then
+    log "WARNING: wlan still rfkill-blocked after retries; ip link set up will fail"
   fi
 
   if command -v iw >/dev/null 2>&1 && [[ -n "$country" ]]; then
@@ -254,6 +283,14 @@ main() {
   # Force the interface into a known state and assign the AP IP.
   ip link set "$INTERFACE" down 2>/dev/null || true
   ip addr flush dev "$INTERFACE" || true
+  if wlan_rfkill_blocked; then
+    log "pre-up: wlan STILL rfkill-blocked; attempting final unblock"
+    command -v rfkill >/dev/null 2>&1 && rfkill unblock wlan 2>/dev/null || true
+    for sw in /sys/class/rfkill/*; do
+      [[ -r "${sw}/type" ]] && [[ "$(cat "${sw}/type")" == "wlan" ]] \
+        && printf '0' > "${sw}/soft" 2>/dev/null || true
+    done
+  fi
   ip link set "$INTERFACE" up
   ip addr add 10.42.0.1/24 dev "$INTERFACE"
 

@@ -2,7 +2,7 @@
 Description=PrepperPi — render hostapd/dnsmasq config and bring up wlan0
 Documentation=https://github.com/jmarler/prepperpi
 DefaultDependencies=no
-After=local-fs.target systemd-udev-settle.service sys-subsystem-net-devices-wlan0.device
+After=local-fs.target systemd-udev-settle.service sys-subsystem-net-devices-wlan0.device NetworkManager.service
 Wants=systemd-udev-settle.service sys-subsystem-net-devices-wlan0.device
 Before=hostapd.service dnsmasq.service network.target
 ConditionPathExists=/sys/class/net/wlan0
