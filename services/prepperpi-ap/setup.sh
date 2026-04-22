@@ -26,7 +26,7 @@ install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
   apt-get install -y --no-install-recommends \
-    hostapd dnsmasq iw iproute2
+    hostapd dnsmasq iw iproute2 rfkill
   # Ship the services as disabled — we control them through our own
   # oneshot configure unit, so the stock units only start after we've
   # rendered config. Unmask if the image masks them.

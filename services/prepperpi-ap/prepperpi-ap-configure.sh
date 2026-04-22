@@ -38,7 +38,7 @@ COUNTRY="US"
 CHANNEL="auto"
 MAX_STA=""
 
-log() { printf '[prepperpi-ap-configure] %s\n' "$*"; }
+log() { printf '[prepperpi-ap-configure] %s\n' "$*" >&2; }
 die() { printf '[prepperpi-ap-configure] FATAL: %s\n' "$*" >&2; exit 1; }
 
 # ---------- load overrides ----------
@@ -157,6 +157,36 @@ pick_channel() {
   printf '%s' "$best"
 }
 
+release_radio() {
+  # Hand wlan0 over to us: stop anything else managing it, drop any
+  # rfkill soft-block (Pi OS Lite ships wlan0 rfkill-blocked until a
+  # userspace daemon unblocks it), and pin the regdom so hostapd's
+  # channel list is correct from the first scan.
+  local iface="$1" country="$2"
+
+  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
+    nmcli dev set "$iface" managed no 2>/dev/null || true
+  fi
+  systemctl stop "wpa_supplicant@${iface}.service" 2>/dev/null || true
+
+  if command -v rfkill >/dev/null 2>&1; then
+    rfkill unblock wlan 2>/dev/null || true
+  else
+    # Fallback: poke the sysfs node directly for each wlan rfkill switch.
+    local sw
+    for sw in /sys/class/rfkill/*; do
+      [[ -r "${sw}/type" ]] || continue
+      if [[ "$(cat "${sw}/type")" == "wlan" ]]; then
+        printf '0' > "${sw}/soft" 2>/dev/null || true
+      fi
+    done
+  fi
+
+  if command -v iw >/dev/null 2>&1 && [[ -n "$country" ]]; then
+    iw reg set "$country" 2>/dev/null || true
+  fi
+}
+
 render_auth_block() {
   local pass="$1"
   if [[ -z "$pass" ]]; then
@@ -170,24 +200,24 @@ render_auth_block() {
   fi
 }
 
-# Template fill: replace @KEY@ with the values in ${_TMPL[*]} (set by caller).
+# Template fill: replace @KEY@ with the paired values. Arguments after
+# src/dst are (KEY, VALUE) pairs. Values are substituted literally --
+# newlines, ampersands, and regex metacharacters are all safe.
 render_template() {
   local src="$1" dst="$2"
   shift 2
-  local tmp
-  tmp=$(mktemp)
-  cp "$src" "$tmp"
+  local content
+  # cat + sentinel preserves trailing newlines that $() would strip.
+  content=$(cat "$src"; printf x)
+  content="${content%x}"
   while (( $# >= 2 )); do
-    local key="$1" val="$2"
-    # Use a sed delimiter unlikely to appear in any of our values.
-    # Escape backslashes, ampersands, and the delimiter.
-    local esc
-    esc=$(printf '%s' "$val" \
-          | sed -e 's/[\\&|]/\\&/g' \
-          | awk '{ gsub(/\n/, "\\n"); print }')
-    sed -i "s|@${key}@|${esc}|g" "$tmp"
+    local key="@$1@" val="$2"
+    content="${content//"$key"/$val}"
     shift 2
   done
+  local tmp
+  tmp=$(mktemp)
+  printf '%s' "$content" > "$tmp"
   install -o root -g root -m 0644 "$tmp" "$dst"
   rm -f "$tmp"
 }
@@ -212,18 +242,14 @@ main() {
     MAX_STA=$(pi_model_default_max_sta)
   fi
 
+  # Claim the radio before doing anything that needs it up.
+  release_radio "$INTERFACE" "$COUNTRY"
+
   if [[ "$CHANNEL" == "auto" || -z "$CHANNEL" ]]; then
     CHANNEL=$(pick_channel "$INTERFACE")
   fi
 
   log "interface=${INTERFACE} ssid=${SSID} channel=${CHANNEL} country=${COUNTRY} max_sta=${MAX_STA}"
-
-  # Stop anything that wants to manage wlan0 so hostapd can have it.
-  # NetworkManager: unmanaged. wpa_supplicant: stop on this iface.
-  if systemctl is-active --quiet NetworkManager 2>/dev/null; then
-    nmcli dev set "$INTERFACE" managed no 2>/dev/null || true
-  fi
-  systemctl stop "wpa_supplicant@${INTERFACE}.service" 2>/dev/null || true
 
   # Force the interface into a known state and assign the AP IP.
   ip link set "$INTERFACE" down 2>/dev/null || true

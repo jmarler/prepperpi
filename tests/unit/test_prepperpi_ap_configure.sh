@@ -59,6 +59,33 @@ else
   printf '  ok  7-char password rejected\n'
 fi
 
+# ---------- render_template ----------
+printf 'render_template\n'
+
+TMPDIR_TEST=$(mktemp -d)
+trap 'rm -rf "$TMPDIR_TEST"' EXIT
+
+tmpl="${TMPDIR_TEST}/in.tmpl"
+out="${TMPDIR_TEST}/out"
+cat > "$tmpl" <<'EOF'
+name=@SSID@
+block=@AUTH_BLOCK@
+trail=@INTERFACE@
+EOF
+
+# Runs as unprivileged user, so we need install to skip -o root -g root.
+# Shadow install with a thin wrapper that preserves the command for tests.
+install() { command install -m 0644 "${@: -2}"; }
+render_template "$tmpl" "$out" \
+  SSID "PrepperPi-TEST" \
+  AUTH_BLOCK $'auth_algs=1\nwpa=2\nwpa_passphrase=s3cret&more' \
+  INTERFACE "wlan0"
+unset -f install
+
+expected=$'name=PrepperPi-TEST\nblock=auth_algs=1\nwpa=2\nwpa_passphrase=s3cret&more\ntrail=wlan0\n'
+got=$(cat "$out"; printf x); got="${got%x}"
+assert_eq "$expected" "$got" "multi-line value with ampersand expands verbatim"
+
 # ---------- summary ----------
 printf '\n%s passed, %s failed\n' "$PASS" "$FAIL"
 exit $(( FAIL == 0 ? 0 : 1 ))
