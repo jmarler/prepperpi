@@ -25,7 +25,10 @@ readonly REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly WORK_DIR="${PREPPERPI_WORK:-${SCRIPT_DIR}/.work}"
 readonly OUT_DIR="${PREPPERPI_OUT:-${SCRIPT_DIR}/out}"
 readonly PI_GEN_REPO="https://github.com/RPi-Distro/pi-gen"
-readonly PI_GEN_REF="${PI_GEN_REF:-master}"
+# pi-gen's `arm64` branch produces 64-bit Pi OS Lite images for Pi 3B+
+# onwards. The `master` branch is 32-bit armhf, which is NOT what we
+# want (Pi 4B+ with 4 GB+ RAM benefits from arm64).
+readonly PI_GEN_REF="${PI_GEN_REF:-arm64}"
 readonly PI_GEN_DIR="${WORK_DIR}/pi-gen"
 
 log() { printf '[prepperpi/image] %s\n' "$*"; }
@@ -50,8 +53,14 @@ check_docker() {
 
 clone_pi_gen() {
   if [[ -d "${PI_GEN_DIR}/.git" ]]; then
-    log "reusing existing pi-gen clone at ${PI_GEN_DIR} (delete for a fresh one)"
-    return 0
+    local current_ref
+    current_ref=$(git -C "$PI_GEN_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    if [[ "$current_ref" == "$PI_GEN_REF" ]]; then
+      log "reusing existing pi-gen clone at ${PI_GEN_DIR} (on ${PI_GEN_REF})"
+      return 0
+    fi
+    log "existing pi-gen clone is on '${current_ref}', need '${PI_GEN_REF}'; re-cloning"
+    rm -rf "$PI_GEN_DIR"
   fi
   log "cloning pi-gen (ref=${PI_GEN_REF}) to ${PI_GEN_DIR}"
   mkdir -p "$WORK_DIR"

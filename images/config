@@ -2,7 +2,11 @@
 # script. See upstream pi-gen README for the full list of knobs.
 
 IMG_NAME="prepperpi"
-RELEASE="bookworm"
+
+# RELEASE is intentionally NOT set here: pi-gen's `arm64` branch
+# pins it internally to whatever Debian version the official Pi OS
+# 64-bit Lite image currently ships (Bookworm in 2024-2025, Trixie
+# going forward). Overriding it trips pi-gen's sanity check.
 
 # Only build through stage2 (lite base) + our stage. Stage3/4/5 add
 # the GUI desktop, which we don't want.

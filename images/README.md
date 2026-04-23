@@ -96,7 +96,7 @@ To keep the headless first-boot path working (AC-3: AP up within 5 min), the ima
 
 | Env var | Default | Purpose |
 |---|---|---|
-| `PI_GEN_REF` | `master` | git ref of RPi-Distro/pi-gen to check out |
+| `PI_GEN_REF` | `arm64` | git ref of RPi-Distro/pi-gen to check out. The `arm64` branch produces 64-bit Pi OS Lite images; `master` is 32-bit armhf, which we don't ship. |
 | `PREPPERPI_WORK` | `images/.work` | local build scratch dir |
 | `PREPPERPI_OUT` | `images/out` | artifact output dir |
 
