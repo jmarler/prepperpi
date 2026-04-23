@@ -7,7 +7,7 @@
 Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, and more — no internet, no subscriptions, no tracking.
 
 [![License: MIT-0](https://img.shields.io/badge/license-MIT--0-blue)](LICENSE)
-[![Status: Pre-Alpha](https://img.shields.io/badge/status-pre--alpha-orange)](#status)
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-yellow)](#status)
 [![Platform: Raspberry Pi 4B / 5](https://img.shields.io/badge/platform-Raspberry%20Pi%204B%20%2F%205-c51a4a)](#hardware)
 
 </div>
@@ -16,7 +16,25 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **pre-v1**. The plan is complete and the repository is being stood up; there is nothing here to install yet. Star the repo if you want to be notified when the first image drops, or dive into the [roadmap](#roadmap) if you'd like to help build it.
+PrepperPi is **alpha**. The base appliance (Epic 1) is complete and end-to-end verified on a Pi 4B: boot, SSID up, captive portal, landing page. Content services (Wikipedia, maps, admin console) are the next phase and haven't shipped yet.
+
+**What works today:**
+
+- ✅ Flashable SD card image OR curl-bash installer path
+- ✅ Wi-Fi access point (`PrepperPi-XXXX`), open or WPA2 via boot-partition config
+- ✅ Captive portal — iPhone auto-pops, Samsung requires typing any URL in a browser (documented quirk)
+- ✅ Placeholder landing page with four content-module tiles
+
+**Not yet shipped (planned):**
+
+- Offline Wikipedia, iFixit, maps, medical, and other Kiwix-served content (Epic 2)
+- Vector tile server for offline maps (Epic 3)
+- Browser admin console for SSID / password / content management (Epic 4)
+- One-click content bundles and update engine (Epic 5)
+- Config export, backup to USB (Epic 6)
+- Signed release images, auto-generated release notes (Epic 7)
+
+Star the repo if you want to be notified as each phase lands, or dive into the [roadmap](#roadmap) if you'd like to help build it.
 
 ## What is PrepperPi?
 
@@ -82,24 +100,45 @@ You'll also want:
 
 ## Quick start
 
-> Neither path works yet — this is what the quick start will look like once v1 ships.
+### Path A — install on an existing Raspberry Pi OS Lite (maker, works today)
 
-### Path A — flash a prebuilt image (non-technical)
-
-1. Download the latest `prepperpi-<version>-<pi4|pi5>.img.xz` from [GitHub Releases](https://github.com/jmarler/prepperpi/releases).
-2. Verify the SHA-256 against the published `SHA256SUMS`.
-3. Flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) onto a 16 GB+ SD card.
-4. Optionally edit `prepperpi.conf` on the boot partition to set your SSID, password, locale, and timezone.
-5. Insert the card, plug the Pi into power, and wait about five minutes.
-6. Join the `PrepperPi-XXXX` Wi-Fi from any phone. The home page opens automatically.
-
-### Path B — install on an existing Raspberry Pi OS Lite (maker)
+Start with a fresh **Raspberry Pi OS Lite (64-bit, Bookworm or Trixie)** install on a Pi 4B or Pi 5. Then:
 
 ```bash
-curl -fsSL https://get.prepperpi.org | bash
+git clone https://github.com/jmarler/prepperpi.git
+cd prepperpi
+sudo installer/install.sh
 ```
 
-The installer detects the Pi model, installs dependencies, writes systemd units, creates `/srv/prepperpi`, and reboots into AP mode. Re-running the installer is idempotent.
+The installer runs its preflight checks, asks you once to confirm that it's OK to reboot at the end, then proceeds unattended. It installs apt dependencies, writes systemd units, provisions a `prepperpi` system user, lays down `/srv/prepperpi/`, and reboots into AP mode. Re-running is idempotent.
+
+After reboot: join the `PrepperPi-XXXX` Wi-Fi from any phone → the portal opens (iPhone), or open any URL in Chrome (Samsung). See [`installer/README.md`](installer/README.md) for flags (`--yes` for `curl | bash`, `--no-reboot` to stay in place).
+
+The curl-bash one-liner (`curl -fsSL get.prepperpi.org | bash`) is planned for Epic 7 once there's a CDN-hosted release.
+
+### Path B — flash a prebuilt image (non-technical, works today if you build it yourself)
+
+A flashable `.zip` image is produced by `images/build.sh`. On an ARM64 host (Apple Silicon Mac, a Pi itself, GitHub's `ubuntu-24.04-arm` runners) the build takes ~5 minutes in Docker and produces an ~810 MB artifact. On an x86_64 host with qemu it's ~45–90 minutes.
+
+```bash
+images/build.sh      # needs Docker Desktop / docker + git; output at images/out/
+```
+
+Flash the resulting `.zip` with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) ("Choose OS" → "Use custom"). On first boot the Pi comes up as `PrepperPi-<mac4>` within ~90 seconds.
+
+GitHub Releases with prebuilt images, SHA-256 sums, and GPG signatures are planned for Epic 7. Until then, build from source.
+
+### Pre-flash configuration
+
+Boot partition files work the same on both paths. Drop them on the FAT32 `bootfs` volume before first boot:
+
+| File | Purpose |
+|---|---|
+| `prepperpi.conf` | Override Wi-Fi SSID, password, channel, country code — see [`services/prepperpi-ap/prepperpi.conf.example`](services/prepperpi-ap/prepperpi.conf.example). |
+| `ssh` *(empty file)* | Enable SSH on first boot. |
+| `userconf.txt` | `user:hashed-password` from `openssl passwd -6` — overrides the baked-in default login. |
+
+**The prebuilt image ships with default login `prepper` / `prepperpi`** to keep headless first-boot working. **Change it before putting the device on any shared network.**
 
 ## Content
 
@@ -122,15 +161,22 @@ Content bundles (`Starter`, `Premium`, `Medical-only`, `Education-only`) install
 
 ## Roadmap
 
-**Phase 1 — Bootable base appliance.** Installer + prebuilt SD image, Wi-Fi access point, captive portal landing page.
+**Phase 1 — Bootable base appliance.** ✅ **Shipped (2026-04).** Installer + prebuilt SD image, Wi-Fi access point, captive portal landing page. All four stories merged.
 
 **Phase 2 — Content and maps.** Kiwix library serving, USB content hosting, offline vector maps with multi-region support.
 
 **Phase 3 — Admin console and updates.** Browser-based settings, live health, one-click content bundles, online mode for updates.
 
-**Phase 4 — Polish and release.** Backup and restore, signed release images, documentation, community channels.
+**Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
 
 Possible futures (not committed): non-Pi SBC support, an optional offline LLM assistant over your library, mesh between multiple PrepperPis, APRS and Winlink ham-radio integrations.
+
+## Known limitations (alpha)
+
+- **Samsung Galaxy devices (One UI 5 / Android 13)** don't auto-open the captive portal on Wi-Fi attach — a documented vendor quirk that every captive portal hits. Workaround: after connecting, open a browser and type any URL; the portal will load. Stock Android (Pixel etc.) is expected to auto-pop but hasn't been tested on hardware.
+- **Pi 5 is not yet verified end-to-end.** All development and testing so far has been on a Pi 4B 8 GB. Pi 5 support is in the code (`pi_model_default_max_sta` differentiates them, raspi-firmware installs for both) but a fresh flash-and-boot test on a Pi 5 is still pending hardware availability.
+- **No content yet.** The landing page ships with four placeholder tiles — Library, Maps, Admin, USB — all marked "Not installed." The actual Kiwix serving, TileServer GL, and admin-console dynamic discovery arrive in Phase 2 / 3.
+- **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are Phase 4.
 
 ## Licensing
 
@@ -147,7 +193,7 @@ The downloader surfaces each item's license in the admin console. If you're doin
 
 ## Clean-room policy
 
-PrepperPi is built from publicly-available descriptions only. Contributors **must not** reference the shipped image of any commercial offline-library product, photograph or dump an SD card from such a product, or include content that was redistributed under an exclusive or licensed-only arrangement. Marketing pages, FAQs, comparison charts, public reviews, and the documentation of upstream open-source projects are fair game. If you're unsure, open an issue before you write the code.
+PrepperPi is built from publicly-available descriptions only. Contributors **must not** reference the shipped image of any commercial offline-library product, copy from or dump an SD card from such a product, or include content that was redistributed under an exclusive or licensed-only arrangement. Marketing pages, FAQs, comparison charts, public reviews, and the documentation of upstream open-source projects are fair game. If you're unsure, open an issue before you write the code.
 
 ## Contributing
 
