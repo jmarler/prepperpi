@@ -148,9 +148,19 @@ run_build() {
 
 collect_output() {
   mkdir -p "$OUT_DIR"
+  # pi-gen's arm64 branch packs its final artifact as a .zip containing
+  # the raw .img (Raspberry Pi Imager reads zipped images natively), and
+  # writes both a "-lite" image from stage2 and a "-prepperpi" image
+  # from our stage. We want the prepperpi one -- it has the full
+  # customization on top of the lite base.
   local img
-  img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*.img.xz' -type f 2>/dev/null | head -n1) || true
-  [[ -n "${img:-}" ]] || die "no .img.xz found under ${PI_GEN_DIR}/deploy/"
+  img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*prepperpi*.zip' -type f 2>/dev/null | head -n1) || true
+  if [[ -z "${img:-}" ]]; then
+    # Fall back to .img.xz in case a future pi-gen version switches
+    # back to that format.
+    img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*prepperpi*.img.xz' -type f 2>/dev/null | head -n1) || true
+  fi
+  [[ -n "${img:-}" ]] || die "no prepperpi image found under ${PI_GEN_DIR}/deploy/"
 
   local base
   base=$(basename "$img")
