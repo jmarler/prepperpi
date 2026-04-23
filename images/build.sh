@@ -128,6 +128,17 @@ stage_prepperpi() {
 }
 
 run_build() {
+  # Nuke any stale per-stage output from a previous (possibly failed)
+  # run. pi-gen is not incremental; a partially-bootstrapped rootfs
+  # left under pi-gen/work/ will confuse debootstrap on the next run
+  # ("rmdir: Directory not empty") and sometimes cause it to fall back
+  # to fetching Release instead of InRelease, which then fails too.
+  # Set PREPPERPI_KEEP_WORK=1 to skip this cleanup during debugging.
+  if [[ -d "${PI_GEN_DIR}/work" && "${PREPPERPI_KEEP_WORK:-0}" != "1" ]]; then
+    log "clearing stale pi-gen work dir (set PREPPERPI_KEEP_WORK=1 to preserve)"
+    rm -rf "${PI_GEN_DIR}/work"
+  fi
+
   log "starting pi-gen build-docker.sh (this is the slow part)"
   cd "$PI_GEN_DIR"
   # build-docker.sh reads the config we wrote above and mounts the
