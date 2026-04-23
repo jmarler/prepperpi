@@ -1,40 +1,36 @@
 #!/bin/bash -e
 # PrepperPi patch for pi-gen, installed into
-# pi-gen/stage0/00-configure-apt/02-no-listchanges.sh by
-# images/build.sh. Runs once, early -- after pi-gen configures apt
-# but before any stage installs heavy package sets (stage0/02-firmware
-# brings in gcc + kernel; stage1 / stage2 add more on top).
+# pi-gen/stage0/00-configure-apt/02-run.sh by images/build.sh. Runs
+# once, early -- after pi-gen configures apt but before any stage
+# installs apt-listchanges.
 #
-# Why this exists:
+# What apt-listchanges does, and why we neutralize it:
 #
-# apt-listchanges is a package that hooks into dpkg's invoke-post and,
-# for every package being installed, reaches out to
-# metadata.ftp-master.debian.org over HTTPS to fetch the changelog so
-# it can print "what changed in this version." It's purely decorative.
-# On Docker Desktop for macOS the embedded DNS resolver (vpnkit) flakes
-# out on that specific hostname -- works fine for deb.debian.org and
-# archive.raspberrypi.com, which is why apt itself succeeds -- and
-# every fetch blocks on the full resolver timeout (~30 s). With ~60
-# packages in stage0/02-firmware alone, that's minutes of dead time
-# per stage. The build eventually completes but the CPU sits idle.
+# apt-listchanges hooks dpkg's invoke-post trigger and, for every
+# package that gets installed, reaches out to
+# metadata.ftp-master.debian.org over HTTPS to fetch the changelog
+# so it can print "what changed in this version." It's purely
+# decorative. On Docker Desktop for macOS the embedded DNS resolver
+# (vpnkit) is flaky on that specific hostname -- works fine for
+# deb.debian.org and archive.raspberrypi.com, which is why apt itself
+# succeeds -- and every fetch blocks on the full resolver timeout
+# (~30 s). With ~60 packages in stage0/02-firmware alone, that's
+# minutes of dead time per stage.
 #
-# We pin apt-listchanges at priority -1 so apt will refuse to install
-# it even if some other package lists it as a Recommends dependency,
-# and we purge any already-installed copy. The pin file sits at a
-# deterministic path so a follow-up stage can verify the setup.
+# An earlier version of this patch pinned the package at APT priority
+# -1 to block installation entirely. That worked, but pi-gen's stage2
+# EXPLICITLY lists apt-listchanges in its install set, so apt aborted
+# the build with "E: Package 'apt-listchanges' has no installation
+# candidate". Preseeding debconf is the right answer: let it install,
+# but tell it up front that its frontend is `none`. With that setting,
+# the dpkg-trigger invocation exits immediately without fetching
+# anything. No DNS, no timeout, no noise.
 
-install -d "${ROOTFS_DIR}/etc/apt/preferences.d"
-cat > "${ROOTFS_DIR}/etc/apt/preferences.d/prepperpi-no-apt-listchanges" <<'EOF'
-Package: apt-listchanges
-Pin: release *
-Pin-Priority: -1
-EOF
-
-# Belt and suspenders: if a previous stage already pulled the package
-# in, remove it now. Ignore the "not installed" case so this step stays
-# idempotent across re-runs.
-on_chroot <<EOF
-if dpkg -l apt-listchanges 2>/dev/null | grep -q '^ii'; then
-  apt-get -y purge apt-listchanges
-fi
-EOF
+on_chroot <<'CHROOT'
+debconf-set-selections <<'SEED'
+apt-listchanges apt-listchanges/frontend select none
+apt-listchanges apt-listchanges/email-address string root@localhost
+apt-listchanges apt-listchanges/confirm boolean false
+apt-listchanges apt-listchanges/save-seen boolean true
+SEED
+CHROOT
