@@ -34,4 +34,4 @@ Thanks for thinking about contributing. PrepperPi is a small project with a big 
 
 ## Security
 
-If you find a security issue, please **do not** open a public issue. Email `security@prepperpi.example` (address will be real once v1 ships). Until then, open a [private security advisory on GitHub](https://github.com/jmarler/prepperpi/security/advisories/new).
+If you find a security issue, please open a [private security advisory on GitHub](https://github.com/jmarler/prepperpi/security/advisories/new).

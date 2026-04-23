@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="PrepperPi — offline reference library served from your Raspberry Pi.">
+<title>PrepperPi</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="site-header">
+	<h1>PrepperPi</h1>
+	<p class="tagline">Offline knowledge, served from the box in front of you.</p>
+</header>
+
+<main class="tiles" aria-label="Content modules">
+	<article class="tile tile--unavailable" aria-labelledby="tile-library-title">
+		<div class="tile__icon" aria-hidden="true">📚</div>
+		<h2 id="tile-library-title" class="tile__title">Library</h2>
+		<p class="tile__desc">Wikipedia, iFixit, WikiMed, and other Kiwix ZIMs.</p>
+		<p class="tile__status">Not installed &mdash; open <strong>Admin</strong> to download content.</p>
+	</article>
+
+	<article class="tile tile--unavailable" aria-labelledby="tile-maps-title">
+		<div class="tile__icon" aria-hidden="true">🗺️</div>
+		<h2 id="tile-maps-title" class="tile__title">Maps</h2>
+		<p class="tile__desc">Offline street maps you can pan and zoom.</p>
+		<p class="tile__status">Not installed &mdash; open <strong>Admin</strong> to install a region.</p>
+	</article>
+
+	<article class="tile tile--unavailable" aria-labelledby="tile-admin-title">
+		<div class="tile__icon" aria-hidden="true">⚙️</div>
+		<h2 id="tile-admin-title" class="tile__title">Admin</h2>
+		<p class="tile__desc">Change Wi-Fi name, password, or download content.</p>
+		<p class="tile__status">Not installed &mdash; shipping in a later release.</p>
+	</article>
+
+	<article class="tile tile--unavailable" aria-labelledby="tile-usb-title">
+		<div class="tile__icon" aria-hidden="true">💾</div>
+		<h2 id="tile-usb-title" class="tile__title">USB</h2>
+		<p class="tile__desc">Browse files from a USB stick you plugged in.</p>
+		<p class="tile__status">No USB detected.</p>
+	</article>
+</main>
+
+<footer class="site-footer">
+	<p>PrepperPi is a free, MIT-0-licensed DIY offline reference server. No accounts, no telemetry, no internet required.</p>
+	<p><a href="https://github.com/jmarler/prepperpi">github.com/jmarler/prepperpi</a></p>
+</footer>
+</body>
+</html>
