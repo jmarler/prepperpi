@@ -1,0 +1,48 @@
+# pi-gen config for the PrepperPi image. Sourced by pi-gen's build
+# script. See upstream pi-gen README for the full list of knobs.
+
+IMG_NAME="prepperpi"
+
+# RELEASE is intentionally NOT set here: pi-gen's `arm64` branch
+# pins it internally to whatever Debian version the official Pi OS
+# 64-bit Lite image currently ships (Bookworm in 2024-2025, Trixie
+# going forward). Overriding it trips pi-gen's sanity check.
+
+# Only build through stage2 (lite base) + our stage. Stage3/4/5 add
+# the GUI desktop, which we don't want.
+STAGE_LIST="stage0 stage1 stage2 ${PREPPERPI_STAGE_DIR:-/pi-gen/stage-prepperpi}"
+
+# Lock the target architecture. Raspberry Pi OS Lite supports arm64
+# on Pi 3+, 4, and 5; 32-bit is not a target for v1.
+TARGET_HOSTNAME="prepperpi"
+LOCALE_DEFAULT="en_US.UTF-8"
+KEYBOARD_KEYMAP="us"
+KEYBOARD_LAYOUT="English (US)"
+TIMEZONE_DEFAULT="UTC"
+
+# First user: Pi OS Lite 2024+ refuses to finish boot without a
+# login user configured. We bake in `prepper` with a well-known
+# default password so a fresh flash boots headlessly and the AP
+# comes up within the AC-3 5-minute budget. This is NOT meant to
+# be a secure end-state -- the README tells operators to either
+# use Raspberry Pi Imager's "Advanced options" at flash time to
+# set a real username/password, or to change the password over
+# SSH post-boot.
+#
+# (This is the `prepper` login account for SSH/console; the
+# `prepperpi` system user that owns /srv/prepperpi is a separate,
+# no-login account provisioned by installer/install.sh.)
+FIRST_USER_NAME="prepper"
+FIRST_USER_PASS="prepperpi"
+# 1 = skip the first-boot "rename user" prompt. Without this, Pi OS
+# halts boot waiting for keyboard input on the rename screen, which
+# would break headless deployment.
+DISABLE_FIRST_BOOT_USER_RENAME=1
+
+# SSH off by default for safety (there's a default password above).
+# Operators can enable via Pi Imager advanced options or by creating
+# an empty `ssh` file on the boot partition before first boot.
+ENABLE_SSH=0
+
+# Image outputs land under /pi-gen/deploy/ inside the container.
+PI_GEN_RELEASE="PrepperPi"

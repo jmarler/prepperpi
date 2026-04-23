@@ -1,0 +1,57 @@
+name: Build SD image
+
+# Manual trigger for now. Tag-triggered release publishing arrives in
+# E7-S2 (CI and release pipeline) along with GPG signing.
+on:
+  workflow_dispatch:
+    inputs:
+      pi_gen_ref:
+        description: "git ref of RPi-Distro/pi-gen to use"
+        required: false
+        default: "master"
+
+jobs:
+  build:
+    # Native ARM64 runner -- pi-gen runs without qemu emulation, which
+    # brings build time down from 45-90 min to ~15-25 min.
+    runs-on: ubuntu-24.04-arm
+    # Give the job plenty of headroom; pi-gen can run for a long time.
+    timeout-minutes: 120
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out PrepperPi
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # `git describe --tags` wants the full history
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            rsync xz-utils ca-certificates
+
+      - name: Build image
+        env:
+          PI_GEN_REF: ${{ inputs.pi_gen_ref }}
+        run: |
+          bash images/build.sh
+
+      - name: Summarize artifact
+        run: |
+          ls -lh images/out/
+          for f in images/out/*.sha256; do
+            echo "=== $f ==="
+            cat "$f"
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: prepperpi-image
+          path: |
+            images/out/*.img.xz
+            images/out/*.sha256
+          retention-days: 14
+          if-no-files-found: error

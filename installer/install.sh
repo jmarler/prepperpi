@@ -38,12 +38,21 @@ readonly SERVICE_ORDER=(
 
 ASSUME_YES="no"
 SKIP_REBOOT="no"
+IMAGE_BUILD="no"
 
 parse_args() {
   while (( $# > 0 )); do
     case "$1" in
       -y|--yes)        ASSUME_YES="yes"; shift ;;
       --no-reboot)     SKIP_REBOOT="yes"; shift ;;
+      --image-build)
+        # Building a pi-gen SD image: we're in a chroot on a non-Pi
+        # host, so the hardware/OS preflight doesn't apply. Implies
+        # --yes and --no-reboot.
+        IMAGE_BUILD="yes"
+        ASSUME_YES="yes"
+        SKIP_REBOOT="yes"
+        shift ;;
       -h|--help)
         sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
         exit 0
@@ -105,6 +114,10 @@ is_supported_os_codename() {
 
 preflight() {
   log "preflight checks"
+  if [[ "$IMAGE_BUILD" == "yes" ]]; then
+    log "  image-build mode; skipping hardware + OS checks"
+    return 0
+  fi
   local model codename
   model=$(detect_pi_model)
   if [[ -z "$model" ]]; then

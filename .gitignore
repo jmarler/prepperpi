@@ -49,3 +49,5 @@ secrets/
 # pi-gen / image build scratch
 /images/work/
 /images/deploy/
+/images/.work/
+/images/out/
