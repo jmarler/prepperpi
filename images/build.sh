@@ -109,6 +109,16 @@ stage_prepperpi() {
       touch "${PI_GEN_DIR}/${s}/SKIP" "${PI_GEN_DIR}/${s}/SKIP_IMAGES"
     fi
   done
+
+  # Drop our pi-gen patches into the right sub-steps of pi-gen's own
+  # stages. Today it's just one file that blocks apt-listchanges (see
+  # the file header for the Docker Desktop DNS rationale). If we add
+  # more of these in the future, we'll want a real manifest -- for now,
+  # the destination path is encoded here.
+  local patch_src="${SCRIPT_DIR}/pi-gen-patches/02-no-listchanges.sh"
+  local patch_dst="${PI_GEN_DIR}/stage0/00-configure-apt/02-no-listchanges.sh"
+  install -m 0755 "$patch_src" "$patch_dst"
+  log "patched pi-gen stage0: ${patch_dst##${PI_GEN_DIR}/}"
 }
 
 run_build() {

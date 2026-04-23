@@ -116,6 +116,16 @@ cd images/out
 sha256sum -c *.sha256
 ```
 
+## pi-gen patches
+
+We drop one small script into pi-gen's own stages at build time. It lives in this repo under `images/pi-gen-patches/` and is copied into place by `build.sh`:
+
+| Patch | Where it lands | What it does |
+|---|---|---|
+| `02-no-listchanges.sh` | `pi-gen/stage0/00-configure-apt/` | Pin + purge `apt-listchanges`. Prevents every subsequent package install from blocking ~30 s on a Docker Desktop DNS timeout for `metadata.ftp-master.debian.org`. |
+
+If pi-gen's `arm64` branch upstream restructures stage0, the destination path in `build.sh` may need a touch-up.
+
 ## CI builds
 
 `.github/workflows/build-image.yml` does the same thing on GitHub's `ubuntu-24.04-arm` runners (manual trigger via the Actions tab). Produces identical artifacts. Tag-triggered release + GPG signing arrives with E7-S2.
