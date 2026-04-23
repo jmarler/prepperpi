@@ -1,0 +1,141 @@
+# PrepperPi — Caddy config for the captive-portal landing page.
+#
+# Deployed at /etc/prepperpi/Caddyfile by services/prepperpi-web/setup.sh
+# and loaded by prepperpi-web.service. Do not edit the deployed copy —
+# changes will be overwritten when prepperpi-web is reinstalled.
+
+{
+	# We serve HTTP on :80 as the primary path (captive probes and
+	# the landing page work before a cert is trusted) and HTTPS on
+	# :443 with a self-signed internal cert so Android's HTTPS
+	# captive probe gets a completed TLS handshake instead of a RST.
+	# `disable_redirects` keeps Caddy from auto-redirecting :80 to
+	# :443 -- we intentionally want clients on HTTP.
+	auto_https disable_redirects
+	admin off
+	log default {
+		level WARN
+	}
+}
+
+# Shared handler chain for :80 and :443. The dnsmasq shipped by
+# prepperpi-ap points every A query at 10.42.0.1, so every client
+# request on the AP subnet lands here regardless of Host header.
+#
+# We also listen on :443 so Android's HTTPS connectivity probe (which
+# aggressively retries against 10.42.0.1:443 after DNS hijack) gets a
+# TLS handshake rather than a TCP RST. Android treats a completed TLS
+# handshake with an untrusted cert as "captive, possibly MITMing"
+# and surfaces the captive UI; a RST is treated as "no internet" and
+# the user gets stuck on the "no internet" notification.
+(app) {
+	# route{} forces the directives below to run in the order written,
+	# and each handle{} is terminal -- once one matches, processing
+	# stops. This keeps probe rewrites from falling through to the
+	# off-host redirect.
+	route {
+		# ---- 1. Health check ----
+		@health path /healthz
+		handle @health {
+			respond "ok" 200
+		}
+
+		# ---- 1b. RFC 8908 Captive-Portal API ----
+		# dnsmasq advertises this URL via DHCP option 114 (RFC 8910).
+		# Clients that support the standard (Android 11+, iOS 14+,
+		# NetworkManager) query it and get a JSON body describing
+		# the captivity state and where the user should browse.
+		# Returning this is the most reliable captive signal we have
+		# for Samsung's Android, which doesn't consistently honor
+		# the 511-on-probe trick.
+		@captive_api path /captive-api
+		handle @captive_api {
+			header Content-Type "application/captive+json"
+			header Cache-Control "no-store"
+			respond `{"captive":true,"user-portal-url":"http://prepperpi.home.arpa/"}` 200
+		}
+
+		# ---- 2. Captive-portal probes ----
+		# iOS, Android, Windows, ChromeOS, and Amazon each poll a
+		# known URL on first Wi-Fi attach; a 2xx "Success"/204
+		# response means the network has real internet, anything
+		# else means captive.
+		#
+		# We use the nodogsplash pattern: HTTP 307 Temporary
+		# Redirect + `Connection: close` + a plain <a> link as the
+		# body. Nodogsplash is a production captive daemon that
+		# reliably fires the captive UI across iOS, stock Android,
+		# and Samsung -- an earlier 511-with-meta-refresh approach
+		# worked on iOS but Samsung silently classified the network
+		# as "no internet" because the meta-refresh looked like the
+		# auth had self-completed. Letting the OS handle the
+		# redirect forces its captive handler to take over.
+		@probes path /hotspot-detect.html \
+			     /library/test/success.html \
+			     /generate_204 \
+			     /gen_204 \
+			     /ncsi.txt \
+			     /connecttest.txt \
+			     /redirect \
+			     /success.txt \
+			     /kindle-wifi/wifistub.html
+		handle @probes {
+			header Connection "close"
+			header Cache-Control "no-store"
+			redir http://prepperpi.home.arpa/ 307
+		}
+
+		# Apple also probes the root of captive.apple.com and
+		# netcts.cdn-apple.com with no well-known path. Same 307.
+		@apple_probe host captive.apple.com netcts.cdn-apple.com
+		handle @apple_probe {
+			header Connection "close"
+			header Cache-Control "no-store"
+			redir http://prepperpi.home.arpa/ 307
+		}
+
+		# ---- 3. Off-host bounce ----
+		# A client reaching us via any DNS-hijacked probe hostname
+		# (e.g. captive.apple.com), or typing the raw IP, is
+		# redirected to the friendly name prepperpi.home.arpa so
+		# the address bar reads cleanly once the user is past the
+		# captive flow. `.home.arpa` (RFC 8375) is a real unicast
+		# DNS name -- iOS / Android resolve it through DHCP DNS,
+		# no mDNS required, which is why we prefer it over `.local`.
+		@offhost not host prepperpi.home.arpa
+		handle @offhost {
+			redir http://prepperpi.home.arpa{uri} 302
+		}
+
+		# ---- 4. Landing page ----
+		# Deep paths fall through to /index.html so bookmarks or
+		# mis-typed URLs still render the portal.
+		handle {
+			root * /opt/prepperpi/web/landing
+			try_files {path} /index.html
+			file_server
+		}
+	}
+
+	# Access log to stderr, captured by systemd journald.
+	log {
+		output stderr
+		format console
+	}
+}
+
+:80 {
+	import app
+}
+
+:443 {
+	# Self-signed cert minted at install time by setup.sh and stored
+	# in /etc/prepperpi/ssl/. Caddy's built-in `tls internal` can't
+	# mint certs for a catch-all `:443` (no hostname to issue for),
+	# so we pre-generate. The cert intentionally doesn't validate
+	# against public trust roots -- its only role is to give Android's
+	# HTTPS captive probe a completed TLS handshake so the OS doesn't
+	# treat our network as "no internet".
+	tls /etc/prepperpi/ssl/cert.pem /etc/prepperpi/ssl/key.pem
+	import app
+}

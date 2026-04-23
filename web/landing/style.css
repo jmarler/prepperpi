@@ -1,0 +1,119 @@
+/* PrepperPi landing page — mobile-first, no JS, 320px baseline. */
+
+:root {
+	--bg: #0f1419;
+	--panel: #1a2028;
+	--panel-dim: #141920;
+	--ink: #e8eaed;
+	--ink-dim: #9aa0a6;
+	--accent: #f5a623;
+	--border: #2d343d;
+	--radius: 0.5rem;
+}
+
+* { box-sizing: border-box; }
+
+html {
+	font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--ink);
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+.site-header {
+	padding: 1.5rem 1rem 1rem;
+	text-align: center;
+	border-bottom: 1px solid var(--border);
+}
+
+.site-header h1 {
+	margin: 0;
+	font-size: 1.75rem;
+	letter-spacing: 0.02em;
+	color: var(--accent);
+}
+
+.tagline {
+	margin: 0.25rem 0 0;
+	color: var(--ink-dim);
+	font-size: 0.95rem;
+}
+
+.tiles {
+	flex: 1;
+	padding: 1rem;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0.75rem;
+	max-width: 60rem;
+	margin: 0 auto;
+	width: 100%;
+}
+
+@media (min-width: 32rem) {
+	.tiles { grid-template-columns: repeat(2, 1fr); gap: 1rem; padding: 1.5rem; }
+}
+
+@media (min-width: 60rem) {
+	.tiles { grid-template-columns: repeat(4, 1fr); }
+}
+
+.tile {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+}
+
+.tile--unavailable {
+	background: var(--panel-dim);
+	color: var(--ink-dim);
+}
+
+.tile__icon {
+	font-size: 2rem;
+	line-height: 1;
+}
+
+.tile__title {
+	margin: 0;
+	font-size: 1.1rem;
+	color: var(--ink);
+}
+
+.tile__desc {
+	margin: 0;
+	font-size: 0.9rem;
+}
+
+.tile__status {
+	margin: 0.25rem 0 0;
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+	font-style: italic;
+}
+
+.site-footer {
+	padding: 1rem;
+	text-align: center;
+	font-size: 0.8rem;
+	color: var(--ink-dim);
+	border-top: 1px solid var(--border);
+}
+
+.site-footer p { margin: 0.25rem 0; }
+
+.site-footer a {
+	color: var(--ink-dim);
+	text-decoration: underline;
+}

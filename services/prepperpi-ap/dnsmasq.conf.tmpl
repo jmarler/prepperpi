@@ -16,15 +16,45 @@ dhcp-range=10.42.0.50,10.42.0.250,255.255.255.0,1h
 dhcp-option=option:router,10.42.0.1
 dhcp-option=option:dns-server,10.42.0.1
 
-# Captive-portal DNS trick: resolve everything to ourselves. The landing
-# page at 10.42.0.1 then serves either the real content or a "you're
-# offline" notice for any host that isn't a known PrepperPi service.
+# RFC 8910 Captive-Portal Identification. Tells clients that support
+# the standard (Android 11+, iOS 14+, modern NetworkManager) exactly
+# where to find our captive-portal API -- much more reliable than
+# relying on each OS's own probe URL, which varies by vendor. The
+# URL points at an RFC 8908 JSON endpoint served by prepperpi-web.
+dhcp-option=114,"http://10.42.0.1/captive-api"
+
+# Captive-portal DNS: catch-all hijack so any hostname a client types
+# (bbc.com, wikipedia.org, anything) resolves to us, our Caddy returns
+# a 307 to the portal, and the browser follows it. This is the
+# traditional captive-portal DNS pattern and what every OS's captive
+# handler expects to see.
+#
+# We briefly tried specific-only hijacks to dodge Samsung's anti-hijack
+# detection (which tests with nonsense names like `google.com.onion`),
+# but that broke user-initiated navigation: Chrome got
+# DNS_PROBE_FINISHED_NO_INTERNET on every URL because nothing but the
+# probe hostnames resolved. That killed the fallback path of "user
+# opens browser, types anything, lands on portal" which is how captive
+# portals actually work in practice.
+#
+# The narrow exemption: `.onion` -- Samsung specifically probes
+# `google.com.onion`, which is not a real DNS zone. Treating it as a
+# local-only zone with no records returns NXDOMAIN, so Samsung's
+# anti-hijack heuristic sees at least one nonsense name correctly
+# unresolved.
+local=/onion/
 address=/#/10.42.0.1
 
-# A friendly local name. Joining clients can hit http://prepperpi.local/.
-local=/prepperpi.local/
-domain=prepperpi.local
-expand-hosts
+# Our friendly name. `.home.arpa` is RFC 8375's reserved slot for home
+# networks; unlike `.local`, iOS / Android resolve it via DHCP-provided
+# DNS instead of mDNS, so no Avahi required. Already covered by the
+# catch-all above, but kept as an explicit rule for clarity.
+#
+# We deliberately DO NOT set `domain=home.arpa` -- doing so causes
+# clients to use .home.arpa as a DHCP Domain-Name search suffix and
+# re-issue every DNS query with `.home.arpa` appended, which creates
+# huge log noise.
+address=/prepperpi.home.arpa/10.42.0.1
 
 # Be quiet about the flood of queries phones make when they land.
 log-queries=extra

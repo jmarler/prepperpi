@@ -1,0 +1,37 @@
+[Unit]
+Description=PrepperPi — web (Caddy) serving captive portal and landing page
+Documentation=https://github.com/jmarler/prepperpi
+After=network-online.target prepperpi-ap.target
+Wants=network-online.target prepperpi-ap.target
+# If the AP isn't up we still start; the admin console expects to be
+# reachable via Ethernet too (future stories). Keep the ordering soft.
+
+[Service]
+Type=notify
+User=caddy
+Group=caddy
+ExecStart=/usr/bin/caddy run --environ --config /etc/prepperpi/Caddyfile --adapter caddyfile
+# No ExecReload: our Caddyfile sets `admin off`, so `caddy reload` has
+# no socket to talk to. Use `systemctl restart prepperpi-web` instead.
+TimeoutStopSec=5s
+Restart=on-failure
+RestartSec=5s
+
+# Let us bind :80 without being root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# Sandboxing. Caddy needs to read /etc/prepperpi and /opt/prepperpi/web.
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/caddy
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target
