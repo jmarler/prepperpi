@@ -112,11 +112,17 @@ stage_prepperpi() {
 
   # Drop our pi-gen patches into the right sub-steps of pi-gen's own
   # stages. Today it's just one file that blocks apt-listchanges (see
-  # the file header for the Docker Desktop DNS rationale). If we add
-  # more of these in the future, we'll want a real manifest -- for now,
-  # the destination path is encoded here.
+  # the patch header for the Docker Desktop DNS rationale).
+  #
+  # Pi-gen's sub-stage runner ONLY executes files matching very
+  # specific name conventions: `NN-run.sh` (outside chroot),
+  # `NN-run-chroot.sh` (inside chroot), `NN-packages`, `NN-patches`,
+  # etc. Files with other names are silently ignored. Our patch source
+  # has a descriptive filename for self-documentation in this repo,
+  # but we install it as `02-run.sh` so pi-gen will actually execute
+  # it (after stage0/00-configure-apt's own 00-run.sh and 01-packages).
   local patch_src="${SCRIPT_DIR}/pi-gen-patches/02-no-listchanges.sh"
-  local patch_dst="${PI_GEN_DIR}/stage0/00-configure-apt/02-no-listchanges.sh"
+  local patch_dst="${PI_GEN_DIR}/stage0/00-configure-apt/02-run.sh"
   install -m 0755 "$patch_src" "$patch_dst"
   log "patched pi-gen stage0: ${patch_dst##${PI_GEN_DIR}/}"
 }
