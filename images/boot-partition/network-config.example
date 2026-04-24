@@ -1,0 +1,34 @@
+# PrepperPi first-boot network configuration.
+#
+# Copy this file onto the FAT32 boot partition of a freshly-flashed
+# SD card as `network-config` (no extension) to override the
+# ethernet-DHCP default. Skip this file entirely if plain DHCP on
+# eth0 is what you want; the image already does that.
+#
+# Format is cloud-init v2 Netplan-style YAML.
+
+version: 2
+
+ethernets:
+  eth0:
+    # Default: grab an IP via DHCP. Typical for a PrepperPi wired
+    # to a home router for admin / content downloads.
+    dhcp4: true
+    # To pin a static address, comment out `dhcp4: true` above and
+    # uncomment the block below.
+    # addresses: [192.168.1.50/24]
+    # routes:
+    #   - to: default
+    #     via: 192.168.1.1
+    # nameservers:
+    #   addresses: [1.1.1.1, 9.9.9.9]
+
+# Uncomment to connect a second radio (wlan1, e.g. a USB dongle) to
+# an upstream Wi-Fi while the onboard wlan0 continues to beacon the
+# PrepperPi AP. Useful for admin work without pulling Ethernet.
+# wifis:
+#   wlan1:
+#     dhcp4: true
+#     access-points:
+#       "YourUpstreamSSID":
+#         password: "Your-Upstream-Password"
