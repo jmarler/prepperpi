@@ -42,14 +42,15 @@ By the time a phone scans Wi-Fi, `PrepperPi-<mac4>` is visible.
 
 ## Pre-flash configuration
 
-Easiest: use Pi Imager's customization (see [Flashing](#flashing)) — Imager writes `user-data` / `network-config` / `meta-data` to the boot partition and our image's cloud-init consumes them on first boot.
-
-Manual alternative: the boot partition of a freshly-flashed card is FAT32, readable from Windows / macOS / Linux. Mount it and drop these files before first boot:
+The boot partition of a freshly-flashed card is FAT32, readable from Windows / macOS / Linux. Drop any of these files on it before first boot:
 
 | File | Purpose |
 |---|---|
-| `prepperpi.conf` | Override Wi-Fi SSID, password, channel, country code. See `services/prepperpi-ap/prepperpi.conf.example` for the full list. Seeded with defaults at image-build time. |
-| `user-data` / `network-config` | cloud-init NoCloud datasource files. The Pi Imager "cloudinit-rpi" flow writes these for you. |
+| `user-data` | cloud-init user config (SSH pubkey, hostname, password policy). Starting template: [`boot-partition/user-data.example`](boot-partition/user-data.example). |
+| `network-config` | cloud-init netplan v2 (static IP, upstream Wi-Fi). Starting template: [`boot-partition/network-config.example`](boot-partition/network-config.example). |
+| `prepperpi.conf` | Override Wi-Fi AP SSID, password, channel, country code. See [`services/prepperpi-ap/prepperpi.conf.example`](../services/prepperpi-ap/prepperpi.conf.example). Seeded at image-build time. |
+
+Details and the full workflow: [`boot-partition/README.md`](boot-partition/README.md).
 
 ### Default login
 
@@ -58,7 +59,7 @@ To keep the headless first-boot path working (AC-3: AP up within 5 min), the ima
 - **Username:** `prepper`
 - **Password:** `prepperpi`
 
-**Change this before putting the device on any shared network.** The easiest way is to set your own credentials in Raspberry Pi Imager's Advanced options (ctrl+shift+x in Imager) before flashing — that produces a `custom.toml` on the boot partition that overrides our defaults.
+**Change this before putting the device on any shared network.** Drop a `user-data` on the boot partition with your own SSH pubkey + `lock_passwd: true` — the starter template already wires this up.
 
 ## How it works
 
@@ -103,34 +104,39 @@ To keep the headless first-boot path working (AC-3: AP up within 5 min), the ima
 
 ## Flashing
 
-### Recommended: Pi Imager with the manifest sidecar
-
-Pi Imager 2.x deliberately greys out the **Use OS customization** button for any locally-opened image file — it can't tell the image's `init_format`, so it refuses to guess. The build produces a small JSON manifest (same schema Imager uses for its online OS list) that fixes this. Launch Imager pointed at the manifest and the OS list will include "PrepperPi" with customization fully enabled:
+### 1. Write the image
 
 ```bash
-# macOS
-"/Applications/Raspberry Pi Imager.app/Contents/MacOS/rpi-imager" \
-  --repo "file://$(pwd)/images/out/image_$(date -u +%Y-%m-%d)-prepperpi-prepperpi.rpi-imager.json"
-
-# Linux
-rpi-imager --repo "file://$(pwd)/images/out/image_$(date -u +%Y-%m-%d)-prepperpi-prepperpi.rpi-imager.json"
-```
-
-Then pick "PrepperPi" from the OS list, select the SD card, click the gear icon to set SSH + pubkey + Wi-Fi + hostname, and write. The customization lands as cloud-init config on the boot partition and runs on first boot via `cloudinit-rpi` (matches Pi OS Lite Trixie).
-
-### Fallback: plain `dd`
-
-If you don't need Imager's customization:
-
-```bash
-# Verify integrity
+# Verify integrity first
 cd images/out && sha256sum -c *.sha256
-
-# macOS / Linux: unzip then dd
-unzip -p image_*-prepperpi-prepperpi.zip | sudo dd of=/dev/sdX bs=4M status=progress
 ```
 
-Or use Imager's "Use custom" → the `.zip` directly; customization will be greyed out, but the baked-in `prepper`/`prepperpi` login still works on first boot.
+Then either:
+
+- **Raspberry Pi Imager** → *Choose OS* → *Use custom* → select the `.zip`. Imager will grey out the *Use OS customization* button (it does that for every locally-loaded image in 2.x — see [boot-partition/README.md](boot-partition/README.md#why-not-pi-imagers-customization-dialog)). Customization happens in step 2 instead.
+- **`dd`**:
+  ```bash
+  unzip -p image_*-prepperpi-prepperpi.zip | sudo dd of=/dev/sdX bs=4M status=progress
+  ```
+
+### 2. Customize via the boot partition (optional)
+
+After flashing, the FAT32 boot partition is auto-mounted (`/Volumes/bootfs` on macOS, `/media/<user>/bootfs` on Linux, a drive letter on Windows). Drop a `user-data` and/or `network-config` file onto it before first boot and cloud-init picks them up via its NoCloud datasource.
+
+Starting templates live in [`images/boot-partition/`](boot-partition/):
+
+```bash
+# Typical: install your SSH pubkey, enable SSH, lock the default password
+cp images/boot-partition/user-data.example /Volumes/bootfs/user-data
+# edit /Volumes/bootfs/user-data, paste your ssh-ed25519 line, save
+diskutil eject /Volumes/bootfs
+```
+
+Without any files dropped on the boot partition, the image boots with `prepper` / `prepperpi` login, SSH off, DHCP on eth0 — usable for console, not ideal for network-attached use. Read the partition README for the full list of knobs.
+
+### Experimental: `rpi-imager --repo` with the generated manifest
+
+`build.sh` also emits a `*.rpi-imager.json` sidecar next to the `.zip` (manifest declaring `init_format: cloudinit-rpi`). In theory `rpi-imager --repo file://...json` re-enables the customization dialog by treating the image as a first-class OS list entry. In practice `--repo` with a `file://` URL is flaky on the macOS Imager build (2.x rejects the path). The manifest is still useful when hosted over HTTP or served out of a GitHub Release; deferred to E7-S2. For now, use the boot-partition path above.
 
 ## pi-gen patches
 

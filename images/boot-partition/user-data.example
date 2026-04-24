@@ -1,0 +1,47 @@
+#cloud-config
+# PrepperPi first-boot user configuration.
+#
+# Copy this file onto the FAT32 boot partition of a freshly-flashed
+# SD card as `user-data` (no extension). cloud-init processes it on
+# first boot via the NoCloud datasource that ships with Pi OS Lite.
+#
+# Minimum viable edit: replace the example ssh-ed25519 key below
+# with your own public key and save. Everything else has a sensible
+# default.
+#
+# Fields are standard cloud-init cloud-config; see
+# https://cloudinit.readthedocs.io/en/latest/reference/modules.html
+# for the full reference.
+
+# Hostname on the LAN. Unrelated to the Wi-Fi SSID (which is
+# `PrepperPi-<last-4-of-MAC>` and set by prepperpi-ap).
+hostname: prepperpi
+
+# The `prepper` account is baked into the image (pi-gen config).
+# We reconfigure it here rather than creating a new one so you
+# don't end up with two login accounts.
+users:
+  - name: prepper
+    # Preserve the default sudo + groups set pi-gen assigned.
+    groups: [adm, dialout, audio, netdev, video, plugdev, cdrom,
+             games, input, gpio, spi, i2c, render, sudo]
+    shell: /bin/bash
+    # Authorize your SSH key(s). Replace with your own ssh-ed25519
+    # or ssh-rsa line(s) -- one per list entry.
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEREPLACEME your@laptop
+    # Lock password login so only the pubkey works. Comment this line
+    # to keep the default `prepperpi` password as a fallback (useful
+    # for console debugging, awful for anything on a real network).
+    lock_passwd: true
+
+# Turn on SSH. pi-gen's ENABLE_SSH=0 default keeps it off unless
+# cloud-init or an `ssh` marker file says otherwise.
+ssh_pwauth: false
+runcmd:
+  - systemctl enable ssh
+  - systemctl start ssh
+
+# Optional: preserve the cloud-init logs across reboots so first-boot
+# issues stay debuggable without a serial console.
+# output: { all: "| tee -a /var/log/cloud-init-output.log" }
