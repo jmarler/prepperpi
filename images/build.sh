@@ -15,8 +15,11 @@
 #   PREPPERPI_OUT     local artifact dir   (default: images/out)
 #
 # Output:
-#   images/out/prepperpi-<version>-<date>-prepperpi.img.xz
-#   images/out/prepperpi-<version>-<date>-prepperpi.img.xz.sha256
+#   images/out/prepperpi-<version>-<date>-prepperpi.zip
+#   images/out/prepperpi-<version>-<date>-prepperpi.zip.sha256
+#   images/out/prepperpi-<version>-<date>-prepperpi.rpi-imager.json
+#     (manifest sidecar for `rpi-imager --repo`; restores the
+#      "Use OS customization" button when loading the image).
 
 set -euo pipefail
 
@@ -146,30 +149,101 @@ run_build() {
   ./build-docker.sh
 }
 
+# Portable SHA-256 over a file. macOS has `shasum` in its base image,
+# Linux has `sha256sum`; the build-host wrapper runs on both.
+sha256_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    die "neither sha256sum nor shasum found on host"
+  fi
+}
+
 collect_output() {
   mkdir -p "$OUT_DIR"
   # pi-gen's arm64 branch packs its final artifact as a .zip containing
-  # the raw .img (Raspberry Pi Imager reads zipped images natively), and
-  # writes both a "-lite" image from stage2 and a "-prepperpi" image
-  # from our stage. We want the prepperpi one -- it has the full
-  # customization on top of the lite base.
+  # the raw .img (Raspberry Pi Imager reads zipped images natively).
+  # It writes TWO images: a "-lite.zip" from stage2 (the base Pi OS
+  # Lite) and a "-prepperpi.zip" from our stage (base + PrepperPi
+  # customization). Match our stage's suffix exactly so the -lite one
+  # never wins -- an earlier `*prepperpi*.zip` glob could pick either.
   local img
-  img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*prepperpi*.zip' -type f 2>/dev/null | head -n1) || true
+  img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*-prepperpi.zip' -type f 2>/dev/null | sort | tail -n1) || true
   if [[ -z "${img:-}" ]]; then
     # Fall back to .img.xz in case a future pi-gen version switches
     # back to that format.
-    img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*prepperpi*.img.xz' -type f 2>/dev/null | head -n1) || true
+    img=$(find "${PI_GEN_DIR}/deploy" -maxdepth 2 -name '*-prepperpi.img.xz' -type f 2>/dev/null | sort | tail -n1) || true
   fi
   [[ -n "${img:-}" ]] || die "no prepperpi image found under ${PI_GEN_DIR}/deploy/"
 
   local base
   base=$(basename "$img")
   cp "$img" "${OUT_DIR}/${base}"
-  (cd "$OUT_DIR" && sha256sum "$base" > "${base}.sha256")
+  ZIP_PATH="${OUT_DIR}/${base}"
+  (cd "$OUT_DIR" && sha256_file "$base" > "${base}.sha256")
 
-  log "artifact: ${OUT_DIR}/${base}"
-  log "sha256:   ${OUT_DIR}/${base}.sha256"
-  ls -lh "${OUT_DIR}/${base}"
+  log "artifact: ${ZIP_PATH}"
+  log "sha256:   ${ZIP_PATH}.sha256"
+  ls -lh "${ZIP_PATH}"
+}
+
+write_rpi_imager_manifest() {
+  # Pi Imager 2.x greys out the "Use OS customization" button for any
+  # locally-loaded image because it has no way to know the image's
+  # init_format. Shipping a JSON sidecar manifest (the same schema
+  # Imager uses for its online OS list) lets the operator load our
+  # image via `rpi-imager --repo <manifest>` and get customization back.
+  #
+  # init_format MUST match what the image can actually process on first
+  # boot. Our image is stage2 (Pi OS Lite) Trixie-based, which ships
+  # cloud-init + raspberrypi-sys-mods; the matching format is
+  # "cloudinit-rpi" (confirmed against Imager's live OS list at
+  # https://downloads.raspberrypi.org/os_list_imagingutility_v4.json).
+  [[ -n "${ZIP_PATH:-}" ]] || die "write_rpi_imager_manifest called before collect_output"
+
+  local base
+  base=$(basename "$ZIP_PATH")
+  local manifest_path="${OUT_DIR}/${base%.zip}.rpi-imager.json"
+
+  log "decompressing image to compute extract_size + extract_sha256"
+  local tmp_img
+  tmp_img=$(mktemp -t prepperpi-img.XXXXXX)
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp_img'" RETURN
+  unzip -p "$ZIP_PATH" >"$tmp_img"
+
+  local image_download_size image_download_sha256 extract_size extract_sha256
+  image_download_size=$(wc -c <"$ZIP_PATH" | tr -d ' ')
+  image_download_sha256=$(sha256_file "$ZIP_PATH")
+  extract_size=$(wc -c <"$tmp_img" | tr -d ' ')
+  extract_sha256=$(sha256_file "$tmp_img")
+  rm -f "$tmp_img"
+
+  local release_date
+  release_date=$(date -u +%Y-%m-%d)
+
+  cat >"$manifest_path" <<EOF
+{
+  "os_list": [
+    {
+      "name": "PrepperPi",
+      "description": "PrepperPi offline reference appliance (Raspberry Pi OS Lite arm64 + prepperpi stack).",
+      "url": "file://${ZIP_PATH}",
+      "release_date": "${release_date}",
+      "image_download_size": ${image_download_size},
+      "image_download_sha256": "${image_download_sha256}",
+      "extract_size": ${extract_size},
+      "extract_sha256": "${extract_sha256}",
+      "init_format": "cloudinit-rpi",
+      "devices": ["pi5-64bit", "pi4-64bit", "pi3-64bit"]
+    }
+  ]
+}
+EOF
+  log "manifest: ${manifest_path}"
+  log "flash with: rpi-imager --repo 'file://${manifest_path}'"
 }
 
 main() {
@@ -178,7 +252,13 @@ main() {
   stage_prepperpi
   run_build
   collect_output
+  write_rpi_imager_manifest
   log "done"
 }
 
-main "$@"
+# Only run main when executed directly. Sourcing is supported so tests
+# (or a manifest-only rerun against an existing build) can pull in the
+# helper functions without triggering a full Docker build.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

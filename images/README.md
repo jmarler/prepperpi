@@ -1,6 +1,6 @@
 # images/
 
-Build the PrepperPi SD card image with [pi-gen](https://github.com/RPi-Distro/pi-gen) in Docker. Produces `.img.xz` artifacts that flash with Raspberry Pi Imager and boot straight into a configured PrepperPi appliance.
+Build the PrepperPi SD card image with [pi-gen](https://github.com/RPi-Distro/pi-gen) in Docker. Produces a `.zip`-packaged raw `.img` that flashes with Raspberry Pi Imager and boots straight into a configured PrepperPi appliance.
 
 ## Quick start (local build on ARM64 host)
 
@@ -10,8 +10,9 @@ images/build.sh
 
 Output lands in `images/out/`:
 
-- `prepperpi-<version>-<date>-prepperpi.img.xz` — flash with Raspberry Pi Imager or `dd`
-- `prepperpi-<version>-<date>-prepperpi.img.xz.sha256` — integrity check
+- `image_<date>-prepperpi-prepperpi.zip` — flash with Raspberry Pi Imager or `dd`
+- `image_<date>-prepperpi-prepperpi.zip.sha256` — integrity check
+- `image_<date>-prepperpi-prepperpi.rpi-imager.json` — manifest sidecar (see [Flashing](#flashing))
 
 Typical build time:
 
@@ -24,7 +25,7 @@ First run clones pi-gen to `images/.work/pi-gen/` (a few hundred MB); subsequent
 
 ## What the image contains
 
-Built on top of **Raspberry Pi OS Lite (64-bit, Bookworm)** stage2 from pi-gen, with a custom `stage-prepperpi` stage that:
+Built on top of **Raspberry Pi OS Lite (64-bit, Trixie)** stage2 from pi-gen, with a custom `stage-prepperpi` stage that:
 
 1. Copies the full PrepperPi repo into `/opt/prepperpi-src/`.
 2. Runs `installer/install.sh --image-build` inside pi-gen's chroot, which apt-installs all packages (caddy, hostapd, dnsmasq, iw, rfkill, openssl), provisions the `prepperpi` system user + `/srv/prepperpi/` tree, mints the self-signed TLS cert, and enables every PrepperPi systemd unit.
@@ -41,14 +42,14 @@ By the time a phone scans Wi-Fi, `PrepperPi-<mac4>` is visible.
 
 ## Pre-flash configuration
 
-The boot partition of a freshly-flashed card is FAT32, readable from Windows / macOS / Linux. Mount it and drop these files before first boot:
+Easiest: use Pi Imager's customization (see [Flashing](#flashing)) — Imager writes `user-data` / `network-config` / `meta-data` to the boot partition and our image's cloud-init consumes them on first boot.
+
+Manual alternative: the boot partition of a freshly-flashed card is FAT32, readable from Windows / macOS / Linux. Mount it and drop these files before first boot:
 
 | File | Purpose |
 |---|---|
 | `prepperpi.conf` | Override Wi-Fi SSID, password, channel, country code. See `services/prepperpi-ap/prepperpi.conf.example` for the full list. Seeded with defaults at image-build time. |
-| `ssh` *(empty file)* | Create this file to enable SSH on first boot. |
-| `userconf.txt` | Pi OS's encrypted-user-auth format: `username:hashed-password` produced by `openssl passwd -6`. Overrides the baked-in `prepper` account. |
-| `custom.toml` | Full Pi Imager advanced-options format. Raspberry Pi Imager writes this for you when you use the "Advanced options" gear icon at flash time. |
+| `user-data` / `network-config` | cloud-init NoCloud datasource files. The Pi Imager "cloudinit-rpi" flow writes these for you. |
 
 ### Default login
 
@@ -102,19 +103,34 @@ To keep the headless first-boot path working (AC-3: AP up within 5 min), the ima
 
 ## Flashing
 
-Raspberry Pi Imager → "Choose OS" → "Use custom" → select the `.img.xz`. Or from the command line:
+### Recommended: Pi Imager with the manifest sidecar
+
+Pi Imager 2.x deliberately greys out the **Use OS customization** button for any locally-opened image file — it can't tell the image's `init_format`, so it refuses to guess. The build produces a small JSON manifest (same schema Imager uses for its online OS list) that fixes this. Launch Imager pointed at the manifest and the OS list will include "PrepperPi" with customization fully enabled:
 
 ```bash
-# macOS / Linux
-xz -dc images/out/*.img.xz | sudo dd of=/dev/sdX bs=4M status=progress
+# macOS
+"/Applications/Raspberry Pi Imager.app/Contents/MacOS/rpi-imager" \
+  --repo "file://$(pwd)/images/out/image_$(date -u +%Y-%m-%d)-prepperpi-prepperpi.rpi-imager.json"
+
+# Linux
+rpi-imager --repo "file://$(pwd)/images/out/image_$(date -u +%Y-%m-%d)-prepperpi-prepperpi.rpi-imager.json"
 ```
 
-Verify before flashing:
+Then pick "PrepperPi" from the OS list, select the SD card, click the gear icon to set SSH + pubkey + Wi-Fi + hostname, and write. The customization lands as cloud-init config on the boot partition and runs on first boot via `cloudinit-rpi` (matches Pi OS Lite Trixie).
+
+### Fallback: plain `dd`
+
+If you don't need Imager's customization:
 
 ```bash
-cd images/out
-sha256sum -c *.sha256
+# Verify integrity
+cd images/out && sha256sum -c *.sha256
+
+# macOS / Linux: unzip then dd
+unzip -p image_*-prepperpi-prepperpi.zip | sudo dd of=/dev/sdX bs=4M status=progress
 ```
+
+Or use Imager's "Use custom" → the `.zip` directly; customization will be greyed out, but the baked-in `prepper`/`prepperpi` login still works on first boot.
 
 ## pi-gen patches
 
