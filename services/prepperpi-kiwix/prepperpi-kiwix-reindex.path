@@ -1,0 +1,14 @@
+[Unit]
+Description=PrepperPi — watch /srv/prepperpi/zim for ZIM add/remove
+Documentation=https://github.com/jmarler/prepperpi
+
+[Path]
+# PathChanged fires when the directory's ctime changes, which happens
+# whenever a file inside is created, removed, or renamed -- the three
+# events that should rebuild our tile list. We don't need PathModified
+# here (content edits to an existing ZIM don't change the tile).
+PathChanged=/srv/prepperpi/zim
+Unit=prepperpi-kiwix-reindex.service
+
+[Install]
+WantedBy=multi-user.target

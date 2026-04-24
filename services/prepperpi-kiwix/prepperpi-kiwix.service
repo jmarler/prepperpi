@@ -1,0 +1,33 @@
+[Unit]
+Description=PrepperPi — kiwix-serve (ZIM library reader)
+Documentation=https://github.com/jmarler/prepperpi
+After=network.target
+# Caddy reverse-proxies /library/* here. We bind only to 127.0.0.1 so
+# kiwix-serve is never reachable except through the Caddy front door.
+
+[Service]
+Type=simple
+User=prepperpi
+Group=prepperpi
+ExecStart=/usr/bin/kiwix-serve \
+  --port=8088 \
+  --address=127.0.0.1 \
+  --urlRoot=/library \
+  --library /var/lib/prepperpi/library.xml
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. kiwix-serve needs to read ZIMs under /srv/prepperpi/zim
+# and the library XML under /var/lib/prepperpi. Nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadOnlyPaths=/srv/prepperpi/zim /var/lib/prepperpi
+
+[Install]
+WantedBy=multi-user.target

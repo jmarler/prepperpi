@@ -32,6 +32,7 @@ readonly STATE_SUBDIRS=(zim maps media user-usb config cache backups)
 readonly SERVICE_ORDER=(
   prepperpi-ap
   prepperpi-web
+  prepperpi-kiwix
 )
 
 # ---------- flags ----------
