@@ -33,27 +33,30 @@ human_size() {
   fi
 }
 
-# `zimdump info <file>` emits one key/value per line. The exact labels
-# have drifted across zim-tools releases; we check a few likely forms
-# and fall back to empty so the tile still renders if parsing fails.
-# Yields key=value pairs on stdout for the caller to consume.
-zim_info() {
-  zimdump info "$1" 2>/dev/null || true
-}
-
-zim_field() {
-  # $1 = info output, $2 = regex (matching at the start of a line, up to ':')
-  awk -v re="$2" '
-    {
-      i = index($0, ":");
-      if (i == 0) next;
-      k = substr($0, 1, i-1);
-      v = substr($0, i+1);
-      gsub(/^[ \t]+|[ \t]+$/, "", k);
-      gsub(/^[ \t]+|[ \t]+$/, "", v);
-      if (tolower(k) ~ re) { print v; exit }
+# Read per-book metadata from the just-built library.xml. kiwix-manage
+# emits one self-closing <book> element per entry, all attributes on
+# the same logical line. We pull the fields we need (name, title,
+# articleCount) and reconstruct an absolute path from the basename so
+# the caller doesn't have to care whether kiwix-manage stored it
+# relative to library.xml (it does).
+#
+# Emits one TSV line per book: name<TAB>title<TAB>absolute_path<TAB>articleCount
+library_entries() {
+  [[ -f "$LIB_XML" ]] || return 0
+  awk -v zimdir="$ZIM_DIR" '
+    /<book / {
+      name=""; title=""; path=""; count="";
+      if (match($0, /[[:space:]]name="[^"]*"/))         name=substr($0, RSTART+7, RLENGTH-8);
+      if (match($0, /[[:space:]]title="[^"]*"/))        title=substr($0, RSTART+8, RLENGTH-9);
+      if (match($0, /[[:space:]]path="[^"]*"/))         path=substr($0, RSTART+7, RLENGTH-8);
+      if (match($0, /[[:space:]]articleCount="[^"]*"/)) count=substr($0, RSTART+15, RLENGTH-16);
+      if (name == "" || path == "") next;
+      n = split(path, parts, "/");
+      abs = zimdir "/" parts[n];
+      if (title == "") title = name;
+      print name "\t" title "\t" abs "\t" count;
     }
-  ' <<<"$1"
+  ' "$LIB_XML"
 }
 
 # HTML escape helper for values we inline into the fragment.
@@ -105,16 +108,11 @@ rebuild_fragment() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp'" RETURN
 
-  shopt -s nullglob
-  local count=0 zim
-  for zim in "$ZIM_DIR"/*.zim; do
-    local name info title articles size_bytes size_h articles_txt
-    name=$(basename "${zim%.zim}")
-    info=$(zim_info "$zim")
-    title=$(zim_field "$info" '^(title)$')
-    [[ -z "$title" ]] && title="$name"
-    articles=$(zim_field "$info" '^(count-articles|article-count|articles|article count)$')
-    size_bytes=$(stat -c%s "$zim" 2>/dev/null || echo 0)
+  local count=0
+  while IFS=$'\t' read -r name title abs_path articles; do
+    [[ -z "$name" ]] && continue
+    local size_bytes size_h articles_txt
+    size_bytes=$(stat -c%s "$abs_path" 2>/dev/null || echo 0)
     size_h=$(human_size "$size_bytes")
     if [[ -n "$articles" && "$articles" =~ ^[0-9]+$ ]]; then
       articles_txt="$(printf "%'d" "$articles" 2>/dev/null || printf '%s' "$articles") articles"
@@ -132,8 +130,7 @@ rebuild_fragment() {
       printf '  <p class="tile__status">%s on disk</p>\n' "$(html_escape "$size_h")"
       printf '</article>\n'
     } >>"$tmp"
-  done
-  shopt -u nullglob
+  done < <(library_entries)
 
   if (( count == 0 )); then
     {

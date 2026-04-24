@@ -24,10 +24,10 @@ require_root() {
 }
 
 install_packages() {
-  log "installing apt packages (kiwix-tools, zim-tools)"
+  log "installing apt packages (kiwix-tools)"
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y
-  apt-get install -y --no-install-recommends kiwix-tools zim-tools
+  apt-get install -y --no-install-recommends kiwix-tools
 }
 
 install_files() {
