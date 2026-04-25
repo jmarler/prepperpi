@@ -33,6 +33,7 @@ readonly SERVICE_ORDER=(
   prepperpi-ap
   prepperpi-web
   prepperpi-kiwix
+  prepperpi-usb
 )
 
 # ---------- flags ----------

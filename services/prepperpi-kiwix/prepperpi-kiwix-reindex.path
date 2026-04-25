@@ -1,5 +1,5 @@
 [Unit]
-Description=PrepperPi — watch /srv/prepperpi/zim for ZIM add/remove
+Description=PrepperPi — watch /srv/prepperpi/{zim,user-usb} for ZIM add/remove
 Documentation=https://github.com/jmarler/prepperpi
 
 [Path]
@@ -7,7 +7,14 @@ Documentation=https://github.com/jmarler/prepperpi
 # whenever a file inside is created, removed, or renamed -- the three
 # events that should rebuild our tile list. We don't need PathModified
 # here (content edits to an existing ZIM don't change the tile).
+#
+# The /srv/prepperpi/user-usb watch picks up USB drives being plugged
+# in or yanked: the prepperpi-usb-mount/unmount scripts create or
+# rmdir per-volume subdirectories there, which is exactly the ctime
+# event we want. ZIMs on a plugged-in USB get auto-imported into the
+# kiwix library and removed when the drive goes away.
 PathChanged=/srv/prepperpi/zim
+PathChanged=/srv/prepperpi/user-usb
 Unit=prepperpi-kiwix-reindex.service
 
 [Install]

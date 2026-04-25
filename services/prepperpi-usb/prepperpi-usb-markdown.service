@@ -1,0 +1,28 @@
+[Unit]
+Description=PrepperPi — Markdown renderer for /usb/*.md
+Documentation=https://github.com/jmarler/prepperpi
+After=network.target
+
+[Service]
+Type=simple
+User=prepperpi
+Group=prepperpi
+ExecStart=/usr/bin/python3 /opt/prepperpi/services/prepperpi-usb/markdown_server.py
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. The renderer is read-only against /srv/prepperpi/user-usb
+# and binds 127.0.0.1:8089 only -- no need to reach anything else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/srv/prepperpi/user-usb
+
+[Install]
+WantedBy=multi-user.target

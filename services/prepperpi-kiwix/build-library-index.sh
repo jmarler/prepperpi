@@ -12,6 +12,7 @@
 set -euo pipefail
 
 readonly ZIM_DIR="${ZIM_DIR:-/srv/prepperpi/zim}"
+readonly USB_DIR="${USB_DIR:-/srv/prepperpi/user-usb}"
 readonly LIB_XML="${LIB_XML:-/var/lib/prepperpi/library.xml}"
 readonly FRAGMENT="${FRAGMENT:-/opt/prepperpi/web/landing/_library.html}"
 readonly SEARCH_FRAGMENT="${SEARCH_FRAGMENT:-/opt/prepperpi/web/landing/_library_search.html}"
@@ -56,11 +57,18 @@ human_size() {
 #  - /library/<name>/ redirects to /library/content/<name>/, which
 #    404s; only /library/content/<slug>/ works.
 #
+# Path handling: kiwix-manage stores `path=` relative to the
+# library.xml directory. Local-disk ZIMs and USB ZIMs both end up
+# relative (e.g. ../../../srv/prepperpi/zim/foo.zim and
+# ../../../srv/prepperpi/user-usb/MyDrive/foo.zim respectively).
+# We emit the path as-is and let the bash caller resolve it against
+# the library.xml directory.
+#
 # Emits one TSV line per book:
-#   id<TAB>name<TAB>slug<TAB>title<TAB>absolute_path<TAB>articleCount
+#   id<TAB>name<TAB>slug<TAB>title<TAB>raw_path<TAB>articleCount
 library_entries() {
   [[ -f "$LIB_XML" ]] || return 0
-  awk -v zimdir="$ZIM_DIR" '
+  awk '
     /<book / {
       id=""; name=""; title=""; path=""; count="";
       if (match($0, /[[:space:]]id="[^"]*"/))           id=substr($0, RSTART+5, RLENGTH-6);
@@ -71,13 +79,24 @@ library_entries() {
       if (id == "" || name == "" || path == "") next;
       n = split(path, parts, "/");
       filename = parts[n];
-      abs = zimdir "/" filename;
       slug = filename;
       sub(/\.zim$/, "", slug);
       if (title == "") title = name;
-      print id "\t" name "\t" slug "\t" title "\t" abs "\t" count;
+      print id "\t" name "\t" slug "\t" title "\t" path "\t" count;
     }
   ' "$LIB_XML"
+}
+
+# Resolve a kiwix-manage path attribute (relative to the library.xml
+# directory) to an absolute filesystem path. Absolute inputs are
+# returned unchanged.
+resolve_book_path() {
+  local raw="$1"
+  if [[ "$raw" = /* ]]; then
+    printf '%s' "$raw"
+  else
+    realpath -m -- "$(dirname "$LIB_XML")/$raw"
+  fi
 }
 
 # HTML escape helper for values we inline into the fragment.
@@ -97,17 +116,59 @@ rebuild_library_xml() {
   # mode, and incremental add/remove would drift on rename.
   rm -f "$LIB_XML"
 
-  shopt -s nullglob
-  local zim
-  local added=0
-  for zim in "$ZIM_DIR"/*.zim; do
+  # Discover ZIMs:
+  #  - USB:   anywhere up to 4 levels deep under each mounted USB
+  #           volume. Bounding the depth keeps the scan fast on a
+  #           large drive while still finding ZIMs in nested
+  #           "wikipedia/2026/" style folders.
+  #  - Local: top-level of /srv/prepperpi/zim (single-level glob).
+  #
+  # USB is scanned FIRST because kiwix-manage's `add` is last-write-
+  # wins for duplicate UUIDs: if the same ZIM exists on both a USB
+  # drive and the SD card, the second `add` rewrites the existing
+  # `<book>` entry's `path=` to point at the second source. By
+  # adding USB first and local second, the final library.xml points
+  # at the local copy when both are present -- which is what we
+  # want, since local storage doesn't disappear on a USB yank.
+  #
+  # If a ZIM is unreadable (USB yanked mid-scan), kiwix-manage add
+  # fails with EIO and we WARN+skip; the partial library.xml is
+  # still valid and kiwix-serve picks up exactly the ZIMs we managed
+  # to read.
+  local -a sources=()
+  if [[ -d "$USB_DIR" ]]; then
+    while IFS= read -r -d '' z; do
+      sources+=("$z")
+    done < <(find "$USB_DIR" -mindepth 2 -maxdepth 5 -name '*.zim' -type f -print0 2>/dev/null)
+  fi
+  if [[ -d "$ZIM_DIR" ]]; then
+    while IFS= read -r -d '' z; do
+      sources+=("$z")
+    done < <(find "$ZIM_DIR" -mindepth 1 -maxdepth 1 -name '*.zim' -type f -print0 2>/dev/null)
+  fi
+
+  local zim before after added=0 replaced=0
+  for zim in "${sources[@]}"; do
+    before=$(grep -c '<book ' "$LIB_XML" 2>/dev/null || true)
     if kiwix-manage "$LIB_XML" add "$zim" >/dev/null 2>&1; then
-      added=$((added + 1))
+      after=$(grep -c '<book ' "$LIB_XML" 2>/dev/null || true)
+      if (( before == after )); then
+        # Same book count -> kiwix-manage replaced an existing
+        # entry with this one (duplicate UUID). Useful to see in
+        # journals when a USB is shadowing/being shadowed by a
+        # local copy.
+        log "  duplicate-UUID replace: ${zim}"
+        replaced=$((replaced + 1))
+      else
+        added=$((added + 1))
+      fi
     else
       log "WARN: kiwix-manage failed to add ${zim}; skipping"
     fi
   done
-  shopt -u nullglob
+  if (( replaced > 0 )); then
+    log "  ${replaced} duplicate-UUID entr$([[ $replaced -eq 1 ]] && echo y || echo ies) collapsed"
+  fi
 
   if [[ -f "$LIB_XML" ]]; then
     chown "$SERVICE_USER:$SERVICE_GROUP" "$LIB_XML"
@@ -131,9 +192,10 @@ rebuild_fragment() {
   trap "rm -f '$tiles_tmp' '$search_tmp'" RETURN
 
   local count=0 ids=()
-  while IFS=$'\t' read -r id name slug title abs_path articles; do
+  while IFS=$'\t' read -r id name slug title raw_path articles; do
     [[ -z "$name" ]] && continue
-    local size_bytes size_h articles_txt
+    local abs_path size_bytes size_h articles_txt
+    abs_path=$(resolve_book_path "$raw_path")
     size_bytes=$(stat -c%s "$abs_path" 2>/dev/null || echo 0)
     size_h=$(human_size "$size_bytes")
     if [[ -n "$articles" && "$articles" =~ ^[0-9]+$ ]]; then
