@@ -135,8 +135,11 @@ Boot partition files work the same on both paths. Drop them on the FAT32 `bootfs
 | File | Purpose |
 |---|---|
 | `prepperpi.conf` | Override Wi-Fi SSID, password, channel, country code — see [`services/prepperpi-ap/prepperpi.conf.example`](services/prepperpi-ap/prepperpi.conf.example). |
-| `ssh` *(empty file)* | Enable SSH on first boot. |
-| `userconf.txt` | `user:hashed-password` from `openssl passwd -6` — overrides the baked-in default login. |
+| `user-data` | Cloud-init user config: install your SSH pubkey, set the hostname, lock the default password. Starting template: [`images/boot-partition/user-data.example`](images/boot-partition/user-data.example). |
+| `network-config` | Cloud-init netplan: static IP, or client-mode Wi-Fi on a second radio. Starting template: [`images/boot-partition/network-config.example`](images/boot-partition/network-config.example). |
+| `ssh` *(empty file)* | Older Pi OS marker — still honored by `sshswitch.service`, so `touch /Volumes/bootfs/ssh` enables SSH at boot if you don't want to write a full `user-data`. |
+
+Full walk-through (mount, copy, edit, eject) is in [`images/boot-partition/README.md`](images/boot-partition/README.md).
 
 **The prebuilt image ships with default login `prepper` / `prepperpi`** to keep headless first-boot working. **Change it before putting the device on any shared network.**
 
