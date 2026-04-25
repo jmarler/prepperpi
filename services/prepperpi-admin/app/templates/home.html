@@ -5,11 +5,11 @@
 <p class="admin-lede">Manage the parts of your PrepperPi that don't belong on the public landing page.</p>
 
 {% if uplink and uplink.ethernet %}
-<div class="uplink-banner uplink-banner--online" role="status">
+<div class="uplink-banner uplink-banner--online" role="status" aria-live="polite" data-uplink-banner>
 	<strong>Ethernet uplink active</strong> on <code>{{ uplink.iface }}</code> — downloads possible without interrupting the AP. Wi-Fi clients on this network cannot reach the internet through the Pi.
 </div>
 {% else %}
-<div class="uplink-banner uplink-banner--offline" role="status">
+<div class="uplink-banner uplink-banner--offline" role="status" aria-live="polite" data-uplink-banner>
 	<strong>Offline.</strong> Plug an Ethernet cable in to enable downloads. The AP keeps running while you're online.
 </div>
 {% endif %}

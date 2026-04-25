@@ -65,6 +65,7 @@ install_files() {
   install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
   install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"
   install -m 0644 "${SRC_DIR}/app/static/admin.css"       "${APP_DST}/static/admin.css"
+  install -m 0644 "${SRC_DIR}/app/static/admin.js"        "${APP_DST}/static/admin.js"
 
   # The privileged worker. Owned root:root, mode 0755 so the admin
   # user can execute via sudo but not modify in place. sudo refuses

@@ -65,6 +65,7 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | `app/templates/home.html`                | `/admin/` overview page with section cards.      |
 | `app/templates/network.html`             | `/admin/network` form + reset button.            |
 | `app/static/admin.css`                   | Admin-specific styling (loads `/style.css` too). |
+| `app/static/admin.js`                    | Polls `/admin/uplink` every 5 s; live-swaps the home banner. Progressive enhancement — no-JS users still see the request-time render. |
 | `apply-network-config`                   | Privileged worker. Reads JSON on stdin.          |
 | `sudoers.d-prepperpi-admin`              | Sudoers exception, dropped at `/etc/sudoers.d/`. |
 | `prepperpi-admin.service`                | uvicorn unit, sandboxed.                         |
@@ -79,6 +80,7 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | POST    | `/admin/network`           | Validate, dispatch to wrapper, redirect 303.      |
 | POST    | `/admin/network/reset`     | Factory-reset via wrapper, redirect 303.          |
 | GET     | `/admin/healthz`           | Plain `{"ok": true}` for smoke tests.             |
+| GET     | `/admin/uplink`            | JSON snapshot of uplink state (E4-S3). Polled by `admin.js`. |
 | GET     | `/admin/static/admin.css`  | Static stylesheet.                                |
 
 Behind Caddy's `/admin/*` reverse-proxy. Static files for the landing page (`/style.css`, etc.) come from Caddy's file_server; they're under a different prefix and served directly without going through uvicorn.

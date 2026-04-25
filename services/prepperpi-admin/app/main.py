@@ -140,6 +140,13 @@ async def healthz() -> dict:
     return {"ok": True}
 
 
+@app.get("/admin/uplink")
+async def uplink_state() -> dict:
+    """JSON endpoint polled by admin.js to live-update the home banner.
+    Same shape as the dict passed into the home template."""
+    return detect_uplink()
+
+
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin/", response_class=HTMLResponse)
 async def admin_home(request: Request) -> HTMLResponse:
