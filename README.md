@@ -29,12 +29,12 @@ PrepperPi is **alpha**. The base appliance (Epic 1), most of the content layer (
 - ✅ **Live dashboard** — toast notifications and in-place tile refreshes when USB drives plug/unplug or library content changes; pure progressive enhancement (no-JS users see the same content with a manual refresh)
 - ✅ **Admin console — Network panel** — browser-based admin at `/admin/` reachable only from the AP subnet; change SSID, Wi-Fi password, channel, country, with one-click reset to factory defaults. Form-based with no-JS fallback; an unprivileged FastAPI process shells out via sudo to a privileged worker that's the only thing allowed to rewrite `/boot/firmware/prepperpi.conf` and bounce hostapd
 - ✅ **Online mode (Ethernet uplink)** — plug an Ethernet cable in and the admin home page surfaces an "Ethernet uplink active" banner; the Pi can reach the internet for downloads, but the AP keeps running and AP clients are firewalled off the upstream (the Pi is not a hotspot)
+- ✅ **Storage and health panel** — live CPU / RAM / SoC temperature / disk-free / connected-client count at 1 Hz; per-USB write toggle (session-only — re-plug resets to read-only); recent event log + downloadable JSON of the last 500 events; one-click diagnostics tarball
 
 **Not yet shipped (planned):**
 
 - Catalog selector for downloading ZIMs over an online uplink (Epic 2-S3)
 - Vector tile server for offline maps (Epic 3)
-- Storage panel in the admin console (Epic 4-S2)
 - One-click content bundles and update engine (Epic 5)
 - Config export, backup to USB (Epic 6)
 - Signed release images, auto-generated release notes (Epic 7)
@@ -175,7 +175,7 @@ Content bundles (`Starter`, `Premium`, `Medical-only`, `Education-only`) install
 
 **Phase 2 — Content and maps.** ⏳ **In progress.** Kiwix library serving (E2-S1) ✅, USB content hosting (E2-S2) ✅, live dashboard with event toasts (E2-S4) ✅. Still ahead: ZIM catalog selector for downloading over an uplink (E2-S3), and the entire offline vector-maps stack (E3).
 
-**Phase 3 — Admin console and updates.** ⏳ **In progress.** Network settings panel (E4-S1) ✅, Ethernet online mode (E4-S3) ✅. Still ahead: storage/health (E4-S2), one-click content bundles, update notifier.
+**Phase 3 — Admin console and updates.** ⏳ **In progress.** Network settings (E4-S1) ✅, Ethernet online mode (E4-S3) ✅, Storage and health (E4-S2) ✅. Still ahead: one-click content bundles, update notifier.
 
 **Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
 
@@ -186,7 +186,7 @@ Possible futures (not committed): non-Pi SBC support, an optional offline LLM as
 - **Samsung Galaxy devices (One UI 5 / Android 13)** don't auto-open the captive portal on Wi-Fi attach — a documented vendor quirk that every captive portal hits. Workaround: after connecting, open a browser and type any URL; the portal will load. Stock Android (Pixel etc.) is expected to auto-pop but hasn't been tested on hardware.
 - **Pi 5 is not yet verified end-to-end.** All development and testing so far has been on a Pi 4B 8 GB. Pi 5 support is in the code (`pi_model_default_max_sta` differentiates them, raspi-firmware installs for both) but a fresh flash-and-boot test on a Pi 5 is still pending hardware availability.
 - **Maps aren't built yet.** The landing-page Maps tile renders as a placeholder "Not installed" card. TileServer GL (Phase 2 / E3) replaces it.
-- **Admin console is partial.** Network and Ethernet online-mode work end-to-end; Storage and Content panels are scoped to E4-S2 / E2-S3 and currently render as "(soon)" cards on the admin overview.
+- **Admin console is partial.** Network, Ethernet online-mode, and Storage/health work end-to-end; the Content panel is scoped to E2-S3 and currently renders as a "(soon)" card on the admin overview.
 - **Online mode is Ethernet-only by design.** No Wi-Fi role-swap on the onboard radio (avoids dropping the AP). A USB Wi-Fi dongle would let the Pi be a Wi-Fi client *and* keep the AP up — that's a stretch story, not shipped.
 - **No content downloader UI.** Today you supply ZIMs by `cp` over SSH or by dropping them onto a USB. The in-browser catalog selector arrives in E2-S3.
 - **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are Phase 4.

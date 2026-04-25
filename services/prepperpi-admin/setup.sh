@@ -44,15 +44,24 @@ install_packages() {
 ensure_user() {
   if getent passwd "$ADMIN_USER" >/dev/null; then
     log "user '${ADMIN_USER}' already exists"
-    return 0
+  else
+    log "creating system user '${ADMIN_USER}'"
+    useradd --system \
+            --home-dir "$DST_DIR" \
+            --no-create-home \
+            --shell /usr/sbin/nologin \
+            --user-group \
+            "$ADMIN_USER"
   fi
-  log "creating system user '${ADMIN_USER}'"
-  useradd --system \
-          --home-dir "$DST_DIR" \
-          --no-create-home \
-          --shell /usr/sbin/nologin \
-          --user-group \
-          "$ADMIN_USER"
+
+  # Add to systemd-journal so the diagnostics tarball endpoint (E4-S2 AC-5)
+  # can call `journalctl -u prepperpi-*` without privilege escalation.
+  if getent group systemd-journal >/dev/null; then
+    if ! id -nG "$ADMIN_USER" | tr ' ' '\n' | grep -qx systemd-journal; then
+      log "adding '${ADMIN_USER}' to systemd-journal"
+      usermod -aG systemd-journal "$ADMIN_USER"
+    fi
+  fi
 }
 
 install_files() {
@@ -61,17 +70,21 @@ install_files() {
 
   install -m 0644 "${SRC_DIR}/app/main.py"        "${APP_DST}/main.py"
   install -m 0644 "${SRC_DIR}/app/uplink.py"      "${APP_DST}/uplink.py"
+  install -m 0644 "${SRC_DIR}/app/health.py"      "${APP_DST}/health.py"
   install -m 0644 "${SRC_DIR}/app/templates/base.html"    "${APP_DST}/templates/base.html"
   install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
   install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"
+  install -m 0644 "${SRC_DIR}/app/templates/storage.html" "${APP_DST}/templates/storage.html"
   install -m 0644 "${SRC_DIR}/app/static/admin.css"       "${APP_DST}/static/admin.css"
   install -m 0644 "${SRC_DIR}/app/static/admin.js"        "${APP_DST}/static/admin.js"
 
-  # The privileged worker. Owned root:root, mode 0755 so the admin
+  # The privileged workers. Owned root:root, mode 0755 so the admin
   # user can execute via sudo but not modify in place. sudo refuses
   # to run scripts that are writable by anyone other than root.
   install -m 0755 -o root -g root "${SRC_DIR}/apply-network-config" \
                   "${DST_DIR}/apply-network-config"
+  install -m 0755 -o root -g root "${SRC_DIR}/apply-storage-action" \
+                  "${DST_DIR}/apply-storage-action"
 
   install -m 0644 "${SRC_DIR}/prepperpi-admin.service" \
                   /etc/systemd/system/prepperpi-admin.service
@@ -102,6 +115,13 @@ enable_units() {
   systemctl enable prepperpi-admin.service
 }
 
+restart_units() {
+  # Re-running the installer should leave the service active with the
+  # new code, without requiring a reboot or a manual `systemctl restart`.
+  log "restarting prepperpi-admin.service"
+  systemctl restart prepperpi-admin.service
+}
+
 main() {
   require_root
   install_packages
@@ -110,7 +130,8 @@ main() {
   install_sudoers
   install_landing_tile
   enable_units
-  log "done. Start with 'systemctl start prepperpi-admin.service' or reboot."
+  restart_units
+  log "done. Admin console is active at /admin/."
 }
 
 main "$@"

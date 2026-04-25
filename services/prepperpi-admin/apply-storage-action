@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""apply-storage-action — privileged worker, invoked via sudo by the
+prepperpi-admin FastAPI app.
+
+Reads a JSON spec from stdin and performs one of:
+  {"action": "remount", "name": "<usb-mount-name>", "writable": true}
+  {"action": "remount", "name": "<usb-mount-name>", "writable": false}
+
+`name` is the sanitized directory name under /srv/prepperpi/user-usb/
+that prepperpi-usb-mount.sh chose. The worker validates it strictly
+(alnum + . _ -, no slashes, no traversal) and only operates on real
+mountpoints that already exist under that directory.
+
+The state is **session-only** by design (E4-S2 decision). On unplug,
+all mount state evaporates; on re-plug, prepperpi-usb-mount.sh mounts
+read-only by default. Operators who want write access have to opt
+in again per session.
+
+Same trust-boundary contract as apply-network-config: treat the
+FastAPI process as untrusted. Re-validate every field; ignore argv.
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+USB_BASE = Path("/srv/prepperpi/user-usb")
+
+# Same allowlist that prepperpi-usb-mount.sh's `sanitize` function emits.
+NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
+
+
+def _err(msg: str) -> str:
+    return msg
+
+
+def validate_remount(spec: dict) -> tuple[list[str], Path | None, bool]:
+    errors: list[str] = []
+    name = spec.get("name")
+    writable = spec.get("writable")
+
+    if not isinstance(name, str) or not NAME_RE.match(name):
+        errors.append(_err("name: must be a sanitized USB mount name"))
+        return errors, None, False
+    if name in (".", ".."):
+        errors.append(_err("name: must not be . or .."))
+        return errors, None, False
+    if not isinstance(writable, bool):
+        errors.append(_err("writable: must be true or false"))
+        return errors, None, False
+
+    mount_path = USB_BASE / name
+    # Resolve symlinks defensively. The result must still be inside USB_BASE.
+    try:
+        resolved = mount_path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        errors.append(_err(f"name: no such mount {name!r}"))
+        return errors, None, False
+    if not str(resolved).startswith(str(USB_BASE) + os.sep):
+        errors.append(_err("name: refusing path that escapes user-usb base"))
+        return errors, None, False
+    if not is_mountpoint(str(resolved)):
+        errors.append(_err(f"name: {name!r} is not currently a mount"))
+        return errors, None, False
+
+    return errors, resolved, writable
+
+
+def is_mountpoint(path: str) -> bool:
+    # mountpoint(1) is in util-linux which is always installed.
+    proc = subprocess.run(
+        ["mountpoint", "-q", path],
+        check=False,
+    )
+    return proc.returncode == 0
+
+
+def remount(path: Path, writable: bool) -> None:
+    """Remount in place, preserving the safety flags
+    prepperpi-usb-mount.sh originally applied (nodev/nosuid/noexec)."""
+    rw_flag = "rw" if writable else "ro"
+    options = f"remount,{rw_flag},nodev,nosuid,noexec"
+    subprocess.run(
+        ["mount", "-o", options, str(path)],
+        check=True,
+        timeout=10,
+    )
+
+
+def main() -> int:
+    try:
+        raw = sys.stdin.read()
+        spec = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"invalid JSON on stdin: {exc}\n")
+        return 2
+    if not isinstance(spec, dict):
+        sys.stderr.write("payload must be a JSON object\n")
+        return 2
+
+    action = spec.get("action")
+    if action == "remount":
+        errors, path, writable = validate_remount(spec)
+        if errors or path is None:
+            for e in errors:
+                sys.stderr.write(f"error: {e}\n")
+            return 2
+        try:
+            remount(path, writable)
+        except subprocess.CalledProcessError as exc:
+            sys.stderr.write(f"mount failed: {exc}\n")
+            return 1
+        sys.stdout.write("ok\n")
+        return 0
+
+    sys.stderr.write(f"unknown action: {action!r}\n")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

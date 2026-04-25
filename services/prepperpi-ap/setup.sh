@@ -70,13 +70,27 @@ enable_units() {
   systemctl enable prepperpi-ap.target
 }
 
+restart_units() {
+  # Re-running the installer on an already-running Pi previously left
+  # the AP down: install_packages() stops hostapd+dnsmasq (so our
+  # oneshot configure unit owns boot order), and enable_units() only
+  # enables. The user's only recourse was a reboot. Bringing the units
+  # back up explicitly here means a `--no-reboot` re-install ends with
+  # the AP active, same as a reboot would.
+  log "restarting AP units so the AP is active when the installer exits"
+  systemctl restart prepperpi-ap-configure.service
+  systemctl restart hostapd.service
+  systemctl restart dnsmasq.service
+}
+
 main() {
   require_root
   install_packages
   install_files
   seed_boot_conf
   enable_units
-  log "done. Reboot or run 'systemctl start prepperpi-ap.target' to activate."
+  restart_units
+  log "done. AP is active."
 }
 
 main "$@"

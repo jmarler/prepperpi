@@ -70,6 +70,15 @@ enable_units() {
   systemctl enable prepperpi-kiwix-reindex.path
 }
 
+restart_units() {
+  # Re-running the installer should leave the service active without
+  # a reboot. Path units restart cheaply; the kiwix-serve daemon
+  # restart is fast (sub-second on a Pi 4).
+  log "restarting prepperpi-kiwix units"
+  systemctl restart prepperpi-kiwix.service
+  systemctl restart prepperpi-kiwix-reindex.path
+}
+
 main() {
   require_root
   install_packages
@@ -77,7 +86,8 @@ main() {
   ensure_state
   initial_index
   enable_units
-  log "done. Start with 'systemctl start prepperpi-kiwix.service prepperpi-kiwix-reindex.path' or reboot."
+  restart_units
+  log "done. kiwix-serve is active at /library/."
 }
 
 main "$@"

@@ -4,8 +4,9 @@ Browser-based admin console for PrepperPi. FastAPI + Jinja2 + uvicorn behind Cad
 
 - **Network** panel (E4-S1) — change SSID, Wi-Fi password, channel, country, with a one-click reset to factory defaults.
 - **Online-mode banner** on the home page (E4-S3) — read-only Ethernet-uplink indicator. The Pi is the only thing that goes online; AP clients are firewalled off the upstream by [`prepperpi-ap`](../prepperpi-ap/) so we never become an accidental hotspot.
+- **Storage and health panel** (E4-S2) — live CPU / RAM / SoC temperature / disk-free / connected-client count at 1 Hz. Per-USB write toggle (closes E2-S2 AC-5; session-only — re-plug resets to read-only). Recent event log + downloadable JSON of the last 500 events. Diagnostics tarball download.
 
-Storage and Content panels land in later stories.
+The Content panel lands in E2-S3.
 
 ## Trust model
 
@@ -61,12 +62,15 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | ---------------------------------------- | ------------------------------------------------ |
 | `app/main.py`                            | FastAPI app: routes, validation, sudo dispatch.  |
 | `app/uplink.py`                          | Pure helpers for the Ethernet-uplink banner.     |
+| `app/health.py`                          | Pure parsers + I/O wrappers for the Storage page (`/proc`, `/sys`, `dnsmasq.leases`, `os.statvfs`). |
+| `app/templates/storage.html`             | Server-side render of the Storage and health page. |
 | `app/templates/base.html`                | Layout + nav + theme.                            |
 | `app/templates/home.html`                | `/admin/` overview page with section cards.      |
 | `app/templates/network.html`             | `/admin/network` form + reset button.            |
 | `app/static/admin.css`                   | Admin-specific styling (loads `/style.css` too). |
 | `app/static/admin.js`                    | Polls `/admin/uplink` every 5 s; live-swaps the home banner. Progressive enhancement — no-JS users still see the request-time render. |
-| `apply-network-config`                   | Privileged worker. Reads JSON on stdin.          |
+| `apply-network-config`                   | Privileged worker for the Network panel. JSON on stdin. |
+| `apply-storage-action`                   | Privileged worker for the USB write toggle. JSON on stdin. |
 | `sudoers.d-prepperpi-admin`              | Sudoers exception, dropped at `/etc/sudoers.d/`. |
 | `prepperpi-admin.service`                | uvicorn unit, sandboxed.                         |
 | `_admin.html`                            | Landing-page tile fragment.                      |
@@ -81,6 +85,10 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | POST    | `/admin/network/reset`     | Factory-reset via wrapper, redirect 303.          |
 | GET     | `/admin/healthz`           | Plain `{"ok": true}` for smoke tests.             |
 | GET     | `/admin/uplink`            | JSON snapshot of uplink state (E4-S3). Polled by `admin.js`. |
+| GET     | `/admin/storage`           | Render the Storage and health page (E4-S2).      |
+| GET     | `/admin/health`            | JSON snapshot of system health (CPU, RAM, temp, disks, USB, events). Polled at 1 Hz from the storage page. |
+| POST    | `/admin/storage/usb/{name}/writable` | Toggle a USB drive read-only ↔ writable. Dispatches to `apply-storage-action`. |
+| GET     | `/admin/diagnostics`       | Stream a `tar.gz` diagnostics bundle (logs, snapshots). Wi-Fi password excluded. |
 | GET     | `/admin/static/admin.css`  | Static stylesheet.                                |
 
 Behind Caddy's `/admin/*` reverse-proxy. Static files for the landing page (`/style.css`, etc.) come from Caddy's file_server; they're under a different prefix and served directly without going through uvicorn.

@@ -18,7 +18,7 @@
 	<nav class="admin-nav" aria-label="Admin sections">
 		<a href="/admin/" {% if active == "home" %}aria-current="page" class="admin-nav__active"{% endif %}>Overview</a>
 		<a href="/admin/network" {% if active == "network" %}aria-current="page" class="admin-nav__active"{% endif %}>Network</a>
-		<span class="admin-nav__soon">Storage <small>(soon)</small></span>
+		<a href="/admin/storage" {% if active == "storage" %}aria-current="page" class="admin-nav__active"{% endif %}>Storage</a>
 		<span class="admin-nav__soon">Content <small>(soon)</small></span>
 	</nav>
 

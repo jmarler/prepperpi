@@ -10,7 +10,7 @@ the user might want to see has happened.
   reindex / mount script
         │
         ▼  emit-event.py <type> <message>
-  /opt/prepperpi/web/landing/_events.json   ← ring buffer, last 50 events
+  /opt/prepperpi/web/landing/_events.json   ← ring buffer, last 500 events
         │
         ▼  Caddy file_server
   GET /_events.json   ← dashboard JS polls this every ~2 s
@@ -37,9 +37,14 @@ regions to refresh after a toast fires. Today:
 | `usb_plugged`   | `usb`, `library`, `library_search`   |
 | `usb_unplugged` | `usb`, `library`, `library_search`   |
 | `library_changed` | `library`, `library_search`        |
+| `boot_complete` | (no fragments — surfaced in admin event log only) |
 
 Unknown event types still surface a toast and trigger a
 conservative `library` + `usb` refresh.
+
+## Boot event
+
+`prepperpi-boot-event.service` is a oneshot that fires after `multi-user.target` and emits a `boot_complete` event. Surfaces in the admin Storage page's event log so operators can see "yes, this Pi rebooted at X" without `journalctl`.
 
 ## Atomicity
 

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Storage and health · Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Storage and health</h2>
+
+<div class="storage-temp-banner {% if not snap.temp_warn %}hidden{% endif %}" role="alert" data-temp-banner>
+	<strong>Warning:</strong> SoC temperature is over 80 °C. Move the Pi to better airflow or add a heatsink/fan.
+</div>
+
+<section class="storage-section" aria-labelledby="storage-health-title">
+	<h3 id="storage-health-title" class="storage-section__title">System health</h3>
+	<dl class="storage-stats">
+		<div class="storage-stat"><dt>CPU</dt><dd data-stat="cpu">{{ snap.cpu_percent }}%</dd></div>
+		<div class="storage-stat"><dt>RAM</dt><dd data-stat="memory">{{ format_bytes(snap.memory.used_bytes) }} / {{ format_bytes(snap.memory.total_bytes) }} ({{ snap.memory.percent }}%)</dd></div>
+		<div class="storage-stat"><dt>Temperature</dt><dd data-stat="temp">{% if snap.temp_celsius is not none %}{{ "%.1f"|format(snap.temp_celsius) }} °C{% else %}n/a{% endif %}</dd></div>
+		<div class="storage-stat"><dt>Uptime</dt><dd data-stat="uptime">{{ format_uptime(snap.uptime_seconds) }}</dd></div>
+		<div class="storage-stat"><dt>Connected clients</dt><dd data-stat="clients">{{ snap.clients }}</dd></div>
+	</dl>
+</section>
+
+<section class="storage-section" aria-labelledby="storage-disks-title">
+	<h3 id="storage-disks-title" class="storage-section__title">Disk usage</h3>
+	<ul class="storage-list" data-storage-disks>
+		{% for d in snap.disks %}
+		<li class="storage-row {% if d.low_space %}storage-row--warn{% endif %}">
+			<div class="storage-row__head">
+				<span class="storage-row__label">{{ d.mount }}</span>
+				<span class="storage-row__usage">{{ format_bytes(d.used_bytes) }} / {{ format_bytes(d.total_bytes) }} ({{ d.percent }}%)</span>
+			</div>
+			<div class="storage-bar"><div class="storage-bar__fill" style="width: {{ d.percent }}%"></div></div>
+			{% if d.low_space %}<p class="storage-row__warn">Less than 5% free.</p>{% endif %}
+		</li>
+		{% else %}
+		<li class="storage-row storage-row--empty">No disks reported.</li>
+		{% endfor %}
+	</ul>
+</section>
+
+<section class="storage-section" aria-labelledby="storage-usb-title">
+	<h3 id="storage-usb-title" class="storage-section__title">USB drives</h3>
+	<p class="storage-section__hint">Drives are mounted read-only by default. Enabling write access lasts only until the drive is unplugged — re-plugged drives default back to read-only.</p>
+	<ul class="storage-list" data-storage-usb>
+		{% for u in snap.usb_drives %}
+		<li class="storage-row">
+			<div class="storage-row__head">
+				<span class="storage-row__label">{{ u.name }} <span class="storage-row__sub">{% if u.writable %}<span class="badge badge--writable">writable</span>{% else %}<span class="badge badge--readonly">read-only</span>{% endif %}</span></span>
+				<span class="storage-row__usage">{{ format_bytes(u.used_bytes) }} / {{ format_bytes(u.total_bytes) }} ({{ u.percent }}%)</span>
+			</div>
+			<div class="storage-bar"><div class="storage-bar__fill" style="width: {{ u.percent }}%"></div></div>
+			<form method="post" action="/admin/storage/usb/{{ u.name }}/writable" class="storage-row__form">
+				<input type="hidden" name="writable" value="{{ 'false' if u.writable else 'true' }}">
+				<button type="submit" class="btn {% if u.writable %}btn--danger{% else %}btn--primary{% endif %}">
+					{% if u.writable %}Make read-only{% else %}Make writable{% endif %}
+				</button>
+			</form>
+		</li>
+		{% else %}
+		<li class="storage-row storage-row--empty">No USB drives mounted.</li>
+		{% endfor %}
+	</ul>
+</section>
+
+<section class="storage-section" aria-labelledby="storage-events-title">
+	<h3 id="storage-events-title" class="storage-section__title">Recent events</h3>
+	<ol class="storage-events" data-storage-events>
+		{% for e in snap.events.events|reverse %}
+		<li class="storage-event"><time datetime="{{ e.ts }}">{{ e.ts }}</time> <span class="storage-event__type">{{ e.type }}</span> <span class="storage-event__msg">{{ e.message }}</span></li>
+		{% else %}
+		<li class="storage-event storage-event--empty">No events yet.</li>
+		{% endfor %}
+	</ol>
+	<p class="storage-section__hint"><a href="/_events.json" download="prepperpi-events.json">Download full event log</a> (JSON, last 500 events).</p>
+</section>
+
+<section class="storage-section" aria-labelledby="storage-diag-title">
+	<h3 id="storage-diag-title" class="storage-section__title">Diagnostics</h3>
+	<p class="storage-section__hint">A tarball of logs and system snapshots, useful for sharing with somebody helping you debug. Wi-Fi password is excluded.</p>
+	<a href="/admin/diagnostics" class="btn btn--primary">Download diagnostics tarball</a>
+</section>
+{% endblock %}
