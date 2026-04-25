@@ -1,0 +1,10 @@
+[Unit]
+Description=PrepperPi — rebuild ZIM library index and landing tiles
+Documentation=https://github.com/jmarler/prepperpi
+
+[Service]
+Type=oneshot
+# Runs as root so it can write both /var/lib/prepperpi/library.xml
+# (kiwix library) and /opt/prepperpi/web/landing/_library.html (the
+# Caddy template fragment), and restart prepperpi-kiwix.service.
+ExecStart=/opt/prepperpi/services/prepperpi-kiwix/build-library-index.sh

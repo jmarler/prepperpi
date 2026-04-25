@@ -13,13 +13,10 @@
 	<p class="tagline">Offline knowledge, served from the box in front of you.</p>
 </header>
 
+{{include "/_library_search.html"}}
+
 <main class="tiles" aria-label="Content modules">
-	<article class="tile tile--unavailable" aria-labelledby="tile-library-title">
-		<div class="tile__icon" aria-hidden="true">📚</div>
-		<h2 id="tile-library-title" class="tile__title">Library</h2>
-		<p class="tile__desc">Wikipedia, iFixit, WikiMed, and other Kiwix ZIMs.</p>
-		<p class="tile__status">Not installed &mdash; open <strong>Admin</strong> to download content.</p>
-	</article>
+	{{include "/_library.html"}}
 
 	<article class="tile tile--unavailable" aria-labelledby="tile-maps-title">
 		<div class="tile__icon" aria-hidden="true">🗺️</div>

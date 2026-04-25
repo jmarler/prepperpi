@@ -94,6 +94,16 @@
 			redir http://prepperpi.home.arpa/ 307
 		}
 
+		# ---- 2b. Library (kiwix-serve reverse proxy) ----
+		# /library and everything below it are handled by kiwix-serve
+		# on 127.0.0.1:8088. kiwix-serve was launched with
+		# `--urlRoot=/library`, so it expects the prefix to arrive
+		# intact -- no rewrite needed.
+		@library path /library /library/*
+		handle @library {
+			reverse_proxy 127.0.0.1:8088
+		}
+
 		# ---- 3. Off-host bounce ----
 		# A client reaching us via any DNS-hijacked probe hostname
 		# (e.g. captive.apple.com), or typing the raw IP, is
@@ -109,9 +119,13 @@
 
 		# ---- 4. Landing page ----
 		# Deep paths fall through to /index.html so bookmarks or
-		# mis-typed URLs still render the portal.
+		# mis-typed URLs still render the portal. `templates` runs
+		# index.html through Caddy's Go template engine so the
+		# {{include "/_library.html"}} call inlines the current set
+		# of ZIM tiles rendered by prepperpi-kiwix-reindex.
 		handle {
 			root * /opt/prepperpi/web/landing
+			templates
 			try_files {path} /index.html
 			file_server
 		}
