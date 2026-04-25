@@ -46,7 +46,7 @@ The script asks for confirmation once at the top (it will reboot at the end), th
 
 - The preflight still runs. Still passes.
 - The `prepperpi` user and `/srv/prepperpi` tree are left alone.
-- Each `services/*/setup.sh` re-executes — apt is a no-op, systemd unit files are re-written in place, `systemctl enable` is idempotent.
+- Each `services/*/setup.sh` re-executes — apt is a no-op, systemd unit files are re-written in place, `systemctl enable` is idempotent, and **each daemon is `systemctl restart`ed at the end** so the new code is active when the installer exits. No reboot required for re-installs over SSH.
 - If `--yes` isn't passed, you'll be asked to confirm the reboot again.
 
 Use this to pick up new services after pulling updates from the repo.

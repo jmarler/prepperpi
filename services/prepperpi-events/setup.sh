@@ -25,6 +25,15 @@ install_files() {
   log "installing emit-event.py to ${DST_DIR}"
   install -d -m 0755 "$DST_DIR"
   install -m 0755 "${SRC_DIR}/emit-event.py" "${DST_DIR}/emit-event.py"
+
+  log "installing prepperpi-boot-event.service"
+  install -m 0644 "${SRC_DIR}/prepperpi-boot-event.service" \
+    /etc/systemd/system/prepperpi-boot-event.service
+}
+
+enable_units() {
+  systemctl daemon-reload
+  systemctl enable prepperpi-boot-event.service
 }
 
 seed_events_file() {
@@ -44,6 +53,7 @@ main() {
   require_root
   install_files
   seed_events_file
+  enable_units
   log "done."
 }
 

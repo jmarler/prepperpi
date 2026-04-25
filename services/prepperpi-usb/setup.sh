@@ -72,6 +72,15 @@ enable_units() {
   # directly. Instances are pulled in by the udev rule on demand.
 }
 
+restart_units() {
+  # Re-running the installer should leave units active without a
+  # reboot. Mount template instances are intentionally NOT touched —
+  # bouncing them would unmount the user's currently-plugged drives.
+  log "restarting prepperpi-usb units"
+  systemctl restart prepperpi-usb-markdown.service
+  systemctl restart prepperpi-usb-reindex.path
+}
+
 main() {
   require_root
   install_packages
@@ -79,7 +88,8 @@ main() {
   reload_udev
   initial_index
   enable_units
-  log "done. Plug in a USB drive to test, or reboot to clean-state."
+  restart_units
+  log "done. Plug in a USB drive to test."
 }
 
 main "$@"

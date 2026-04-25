@@ -13,17 +13,21 @@ don't want to encode the AP-subnet CIDR in two places.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
+import tarfile
+import time
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+import health
 from uplink import detect_uplink
 
 APP_DIR = Path(__file__).resolve().parent
@@ -31,6 +35,9 @@ TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
 CONF_FILE = Path("/boot/firmware/prepperpi.conf")
 APPLY_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-network-config"
+STORAGE_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-storage-action"
+EVENTS_FILE = Path("/opt/prepperpi/web/landing/_events.json")
+USB_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
 ALLOWED_COUNTRIES = sorted([
     "AT", "AU", "BE", "BR", "CA", "CH", "CL", "CN", "CO", "CZ",
@@ -113,24 +120,51 @@ def validate_locally(spec: dict) -> list[str]:
     return errors
 
 
-def call_wrapper(payload: dict) -> tuple[bool, str]:
-    """Invoke the privileged apply-network-config worker via sudo.
-    Returns (ok, message). Any non-zero exit propagates the wrapper's
-    stderr so the user sees what specifically failed (e.g. hostapd
-    refused to start with the new country code)."""
+def call_wrapper(payload: dict, cmd: str = APPLY_CMD, timeout: int = 30) -> tuple[bool, str]:
+    """Invoke a privileged worker via sudo. Returns (ok, message).
+    Any non-zero exit propagates the wrapper's stderr so the user
+    sees what specifically failed (e.g. hostapd refused to start with
+    the new country code)."""
     try:
         proc = subprocess.run(
-            ["sudo", "-n", APPLY_CMD],
+            ["sudo", "-n", cmd],
             input=json.dumps(payload),
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        return False, "Applying took too long; check the AP service journal."
+        return False, "Applying took too long; check the journal."
     if proc.returncode == 0:
         return True, proc.stdout.strip() or "ok"
     return False, (proc.stderr or proc.stdout or "apply failed").strip()
+
+
+def read_events_tail(limit: int = 20) -> dict:
+    """Best-effort read of the shared events ring. Returns {version, events}.
+    Empty payload is fine; the dashboard renders that as 'no events yet'."""
+    try:
+        data = json.loads(EVENTS_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"version": 0, "events": []}
+    if not isinstance(data, dict):
+        return {"version": 0, "events": []}
+    events = data.get("events") or []
+    if not isinstance(events, list):
+        events = []
+    return {
+        "version": int(data.get("version", 0)) if isinstance(data.get("version"), int) else 0,
+        "events": events[-limit:],
+    }
+
+
+def health_snapshot() -> dict:
+    """The dict served by /admin/health and passed into storage.html.
+    Includes the most recent 20 events so the storage page only needs
+    to poll one endpoint."""
+    snap = health.snapshot()
+    snap["events"] = read_events_tail(20)
+    return snap
 
 
 # ---------- routes ----------
@@ -227,6 +261,128 @@ async def network_post(
         )
     # Post-Redirect-Get so a refresh doesn't re-submit.
     return RedirectResponse("/admin/network?saved=1", status_code=303)
+
+
+@app.get("/admin/health")
+async def health_state() -> dict:
+    """Live snapshot polled by the storage page (E4-S2 AC-1, 1 Hz)."""
+    return health_snapshot()
+
+
+@app.get("/admin/storage", response_class=HTMLResponse)
+async def storage_get(request: Request) -> HTMLResponse:
+    """Server-side renders the page so no-JS clients still see all
+    the stats. The JS poll then keeps the values fresh."""
+    snap = health_snapshot()
+    return templates.TemplateResponse(
+        "storage.html",
+        {
+            "request": request,
+            "active": "storage",
+            "snap": snap,
+            "format_uptime": health.format_uptime,
+            "format_bytes": health.format_bytes,
+        },
+    )
+
+
+@app.post("/admin/storage/usb/{name}/writable")
+async def storage_usb_toggle(name: str, writable: bool = Form(...)):
+    if not USB_NAME_RE.match(name):
+        raise HTTPException(status_code=400, detail="invalid usb name")
+    payload = {"action": "remount", "name": name, "writable": writable}
+    ok, msg = call_wrapper(payload, cmd=STORAGE_CMD, timeout=15)
+    if not ok:
+        raise HTTPException(status_code=500, detail=msg)
+    # Send the user back to the storage page; the JS poll will
+    # pick up the new writable state on the next tick anyway.
+    return RedirectResponse("/admin/storage", status_code=303)
+
+
+@app.get("/admin/diagnostics")
+async def diagnostics_tarball():
+    """Produce a downloadable diagnostics tarball (E4-S2 AC-5).
+
+    Streams a tar.gz containing the install log, recent journalctl
+    output for our services, /proc/cpuinfo, /proc/meminfo, lsblk, df,
+    ip route, and the current events ring. Wi-Fi password
+    (/boot/firmware/prepperpi.conf) is intentionally NOT included.
+
+    Read-only operation — no privileged escalation. The admin user
+    is in the systemd-journal group so it can read journalctl for
+    its own services.
+    """
+    sections: list[tuple[str, bytes]] = []
+
+    def collect_file(member: str, path: Path) -> None:
+        try:
+            data = path.read_bytes()
+        except OSError as exc:
+            data = f"<unreadable: {exc}>\n".encode()
+        sections.append((member, data))
+
+    def collect_cmd(member: str, argv: list[str]) -> None:
+        try:
+            proc = subprocess.run(
+                argv, capture_output=True, text=False, timeout=10,
+            )
+            data = proc.stdout + (b"\n--- stderr ---\n" + proc.stderr if proc.stderr else b"")
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            data = f"<command failed: {exc}>\n".encode()
+        sections.append((member, data))
+
+    collect_file("install.log", Path("/var/log/prepperpi/install.log"))
+    collect_file("cpuinfo", Path("/proc/cpuinfo"))
+    collect_file("meminfo", Path("/proc/meminfo"))
+    collect_file("uptime", Path("/proc/uptime"))
+    collect_file("os-release", Path("/etc/os-release"))
+    collect_file("events.json", EVENTS_FILE)
+    collect_cmd("df.txt", ["df", "-h"])
+    collect_cmd("lsblk.txt", ["lsblk", "-f"])
+    collect_cmd("ip-route.txt", ["ip", "-4", "route"])
+    collect_cmd("ip-addr.txt", ["ip", "-4", "addr"])
+    collect_cmd("journal-prepperpi.txt", [
+        "journalctl", "-u", "prepperpi-*", "--since=24 hours ago",
+        "--no-pager", "--output=short-iso",
+    ])
+
+    # README pointing operators at what's in here / what's deliberately not.
+    readme = (
+        "PrepperPi diagnostics bundle\n"
+        f"Generated: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}\n"
+        "\n"
+        "Includes:\n"
+        "  - install.log (top-level installer log)\n"
+        "  - cpuinfo, meminfo, uptime, os-release\n"
+        "  - df / lsblk / ip route / ip addr snapshots\n"
+        "  - journalctl output for prepperpi-* units (last 24h)\n"
+        "  - events.json (the dashboard event ring)\n"
+        "\n"
+        "Excluded for privacy:\n"
+        "  - /boot/firmware/prepperpi.conf (Wi-Fi password lives there)\n"
+        "  - SSH host keys, authorized_keys, user data\n"
+        "\n"
+        "If you share this bundle for debugging, scan it first.\n"
+    ).encode()
+    sections.append(("README.txt", readme))
+
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
+        ts = int(time.time())
+        for member, data in sections:
+            info = tarfile.TarInfo(name=f"prepperpi-diag/{member}")
+            info.size = len(data)
+            info.mtime = ts
+            info.mode = 0o644
+            tar.addfile(info, io.BytesIO(data))
+    buffer.seek(0)
+
+    filename = f"prepperpi-diag-{time.strftime('%Y%m%dT%H%M%S')}.tar.gz"
+    return StreamingResponse(
+        buffer,
+        media_type="application/gzip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.post("/admin/network/reset", response_class=HTMLResponse)

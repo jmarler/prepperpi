@@ -39,7 +39,7 @@ LOCK_FILE = Path(os.environ.get(
     "PREPPERPI_EVENTS_LOCK",
     "/run/prepperpi/events.lock",
 ))
-MAX_EVENTS = int(os.environ.get("PREPPERPI_EVENTS_MAX", "50"))
+MAX_EVENTS = int(os.environ.get("PREPPERPI_EVENTS_MAX", "500"))
 
 
 def _read_events() -> dict:

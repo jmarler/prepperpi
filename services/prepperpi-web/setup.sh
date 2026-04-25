@@ -111,6 +111,14 @@ enable_units() {
   systemctl enable prepperpi-web.service
 }
 
+restart_units() {
+  # Re-running the installer should leave the service active without
+  # a reboot; just enabling isn't enough on a system that's already
+  # running with the previous code.
+  log "restarting prepperpi-web.service"
+  systemctl restart prepperpi-web.service
+}
+
 main() {
   require_root
   install_packages
@@ -118,7 +126,8 @@ main() {
   install_files
   validate_caddyfile
   enable_units
-  log "done. Start with 'systemctl start prepperpi-web.service' or reboot."
+  restart_units
+  log "done. Caddy is active."
 }
 
 main "$@"

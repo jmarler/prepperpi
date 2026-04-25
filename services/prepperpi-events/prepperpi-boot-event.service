@@ -1,0 +1,13 @@
+[Unit]
+Description=PrepperPi — emit a boot_complete event to the dashboard log
+Documentation=https://github.com/jmarler/prepperpi
+After=multi-user.target prepperpi-ap.target prepperpi-web.service
+Requires=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/prepperpi/services/prepperpi-events/emit-event.py boot_complete "PrepperPi started up"
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

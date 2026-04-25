@@ -12,3 +12,4 @@
 #   user from passing -E or substituting binaries.
 
 prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/apply-network-config
+prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/apply-storage-action
