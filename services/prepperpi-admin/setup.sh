@@ -60,6 +60,7 @@ install_files() {
   install -d -m 0755 "$DST_DIR" "$APP_DST" "${APP_DST}/templates" "${APP_DST}/static"
 
   install -m 0644 "${SRC_DIR}/app/main.py"        "${APP_DST}/main.py"
+  install -m 0644 "${SRC_DIR}/app/uplink.py"      "${APP_DST}/uplink.py"
   install -m 0644 "${SRC_DIR}/app/templates/base.html"    "${APP_DST}/templates/base.html"
   install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
   install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"

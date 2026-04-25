@@ -1,6 +1,11 @@
 # prepperpi-admin
 
-Browser-based admin console for PrepperPi. FastAPI + Jinja2 + uvicorn behind Caddy at `/admin/*`. Today it ships the **Network** panel (E4-S1) — change SSID, Wi-Fi password, channel, country, with a one-click reset to factory defaults. Storage / Content / Online-mode panels land in later stories.
+Browser-based admin console for PrepperPi. FastAPI + Jinja2 + uvicorn behind Caddy at `/admin/*`. Today it ships:
+
+- **Network** panel (E4-S1) — change SSID, Wi-Fi password, channel, country, with a one-click reset to factory defaults.
+- **Online-mode banner** on the home page (E4-S3) — read-only Ethernet-uplink indicator. The Pi is the only thing that goes online; AP clients are firewalled off the upstream by [`prepperpi-ap`](../prepperpi-ap/) so we never become an accidental hotspot.
+
+Storage and Content panels land in later stories.
 
 ## Trust model
 
@@ -55,6 +60,7 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | Path                                     | Role                                             |
 | ---------------------------------------- | ------------------------------------------------ |
 | `app/main.py`                            | FastAPI app: routes, validation, sudo dispatch.  |
+| `app/uplink.py`                          | Pure helpers for the Ethernet-uplink banner.     |
 | `app/templates/base.html`                | Layout + nav + theme.                            |
 | `app/templates/home.html`                | `/admin/` overview page with section cards.      |
 | `app/templates/network.html`             | `/admin/network` form + reset button.            |
