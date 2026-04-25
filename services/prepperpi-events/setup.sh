@@ -29,6 +29,23 @@ install_files() {
   log "installing prepperpi-boot-event.service"
   install -m 0644 "${SRC_DIR}/prepperpi-boot-event.service" \
     /etc/systemd/system/prepperpi-boot-event.service
+
+  # tmpfiles.d snippet ensures /run/prepperpi/ is sticky-world-write so
+  # cross-user emit-event calls (root via udev, prepperpi via aria2c
+  # hooks) can each drop their own lock files. Without this, whichever
+  # user gets there first owns the dir 0755 and the others fail.
+  log "installing /usr/lib/tmpfiles.d/prepperpi.conf"
+  install -m 0644 "${SRC_DIR}/prepperpi.tmpfiles.conf" \
+    /usr/lib/tmpfiles.d/prepperpi.conf
+  # Clear any stale 0644-root files so --create re-applies our perms.
+  # systemd-tmpfiles' `f` doesn't override existing files' modes.
+  if [[ -e /run/prepperpi/events.lock ]]; then
+    rm -f /run/prepperpi/events.lock
+  fi
+  if [[ -d /run/prepperpi ]]; then
+    chmod 1777 /run/prepperpi
+  fi
+  systemd-tmpfiles --create /usr/lib/tmpfiles.d/prepperpi.conf
 }
 
 enable_units() {

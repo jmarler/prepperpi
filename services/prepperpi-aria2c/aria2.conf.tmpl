@@ -1,0 +1,76 @@
+# /etc/prepperpi/aria2/aria2.conf — rendered from this template by setup.sh.
+# Per-call dir/out are passed via RPC; this file is just daemon-wide policy.
+
+# RPC: localhost only. Secret comes from --rpc-secret on the command line so
+# we don't have to widen this file's permissions to include the admin user.
+enable-rpc=true
+rpc-listen-all=false
+rpc-listen-port=6800
+rpc-allow-origin-all=false
+
+# Resumability: keep a session file so paused/active downloads survive a
+# daemon restart or a Pi reboot.
+save-session=/var/lib/prepperpi/aria2/session.txt
+save-session-interval=60
+input-file=/var/lib/prepperpi/aria2/session.txt
+continue=true
+# 10s (down from default 60) keeps the per-download .aria2 control
+# file fresh, so a pause flushes resume metadata more quickly. Pause
+# does force a save regardless, but a tighter cadence is cheap
+# insurance against any race between pause/unpause RPC calls.
+auto-save-interval=10
+# Tolerate piece-length differences across mirror retries. Kiwix has
+# multiple mirrors per book; without this aria2 sometimes restarts
+# from zero when a resume picks a different mirror.
+allow-piece-length-change=true
+
+# Concurrency policy. Pi 4B over Ethernet doesn't benefit from going wider.
+max-concurrent-downloads=2
+max-connection-per-server=4
+split=4
+# 1M (the minimum aria2 allows) so even modest-sized ZIMs get split into
+# multiple chunks. Side effect: aria2 writes the .aria2 control file for
+# every download >=1MB, which is what makes pause/resume actually
+# resume from where it left off rather than restart from byte 0.
+min-split-size=1M
+
+# File handling.
+file-allocation=none
+allow-overwrite=true
+auto-file-renaming=false
+check-certificate=true
+# Default disk-cache is 16M, which on slow vfat-on-USB writes
+# causes a multi-second visible stall every time the cache fills
+# and flushes. 4M keeps the smoothing benefit (saves a few flushes
+# per minute) without the long pauses. Set to 0 to disable caching
+# entirely if a USB drive is dramatically slow.
+disk-cache=4M
+
+# DNS: aria2's default async (c-ares) resolver doesn't honour glibc's
+# /etc/resolv.conf the way the rest of the system does, which on the
+# Pi caused "No address returned" errors even though `getent ahosts`
+# resolves the same hostname instantly. Falling back to the blocking
+# glibc resolver fixes it.
+async-dns=false
+
+# No metalink. Kiwix's MirrorBrain redirector adds a
+#   Link: <…zim.meta4>; rel=describedby; type=application/metalink4+xml
+# header on every .zim response, which aria2 treats as a metalink
+# discovery hint. With follow-metalink=true (default), aria2 splits
+# the download into a *parent* GID for the metalink (3 KB, transitions
+# to `complete` immediately) plus *child* GIDs for the actual file.
+# We surface only the parent GID to the admin UI, so user pause/resume
+# clicks against it get rejected (HTTP 400, can't pause a completed
+# download) and the real download appears to "restart from 0" on
+# resume because we were never actually pausing it. Disabling
+# metalink-following keeps us at one GID per download — pause/resume
+# semantics work as expected.
+follow-metalink=false
+
+# Hook script: moves the completed file out of <dest>/.downloading/ into
+# <dest>/ so the existing prepperpi-kiwix path watcher reindexes it.
+on-download-complete=/opt/prepperpi/services/prepperpi-aria2c/on-complete.sh
+on-download-error=/opt/prepperpi/services/prepperpi-aria2c/on-error.sh
+
+# Logging. Quiet by default; the journal still has stderr.
+log-level=warn

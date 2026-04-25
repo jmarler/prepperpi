@@ -41,9 +41,28 @@ ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
 # even root. UNIX perms still keep the unprivileged uvicorn process
 # (which has no write permission to the file) from touching it
 # directly; only the wrapper, escalated via sudo to root, can write.
-ReadWritePaths=/boot/firmware
+ReadWritePaths=/boot/firmware /srv/prepperpi/cache
+# /srv/prepperpi/cache for the kiwix-catalog.json cache (E2-S3).
+#
+# We DO NOT add /srv/prepperpi/zim or user-usb here. Two reasons:
+#   1. aria2c (running as `prepperpi`, which owns those paths) does
+#      all the actual writing, including auto-creating destination
+#      dirs at download time, so admin doesn't need write access.
+#   2. Adding user-usb here creates a bind mount in admin's mount
+#      namespace, which silently breaks the USB write-toggle wrapper:
+#      sudo'd `mount -o remount,rw` would target the bind mount, not
+#      the underlying USB device, so the host's /proc/mounts stays ro
+#      and writes still fail.
 LockPersonality=true
-RestrictNamespaces=true
+RestrictNamespaces=mnt
+# Was `true` (deny everything), but `RestrictNamespaces=true` installs
+# a seccomp filter that blocks setns(2), which prevents the sudo'd
+# apply-storage-action wrapper from doing
+#     nsenter --target 1 --mount -- mount -o remount,rw,...
+# to escape into the host's mount namespace. Without that escape, the
+# remount only mutates admin's private namespace view; the host's
+# /proc/mounts stays read-only and aria2c's writes fail with EACCES.
+# Allowing only `mnt` keeps the other namespace types denied.
 MemoryDenyWriteExecute=true
 
 [Install]

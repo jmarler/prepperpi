@@ -15,10 +15,13 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
 import subprocess
 import tarfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -27,6 +30,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+import aria2
+import catalog
 import health
 from uplink import detect_uplink
 
@@ -38,6 +43,18 @@ APPLY_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-network-config"
 STORAGE_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-storage-action"
 EVENTS_FILE = Path("/opt/prepperpi/web/landing/_events.json")
 USB_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
+
+# Catalog cache (E2-S3). The admin daemon owns this directory because
+# the prepperpi-admin systemd unit grants it ReadWritePaths=/srv/prepperpi/cache.
+CATALOG_CACHE = Path("/srv/prepperpi/cache/kiwix-catalog.json")
+# count=-1 returns the entire catalog in one response. The OPDS feed
+# is small (~3MB for the full ~3000-book catalog as of writing), and a
+# single fetch keeps the refresh path simple.
+CATALOG_URL = "https://library.kiwix.org/catalog/v2/entries?count=-1"
+CATALOG_FETCH_TIMEOUT = 60
+CATALOG_USER_AGENT = "PrepperPi-Admin/1 (E2-S3)"
+ZIM_BASE = Path("/srv/prepperpi/zim")
+USB_BASE = Path("/srv/prepperpi/user-usb")
 
 ALLOWED_COUNTRIES = sorted([
     "AT", "AU", "BE", "BR", "CA", "CH", "CL", "CN", "CO", "CZ",
@@ -167,15 +184,159 @@ def health_snapshot() -> dict:
     return snap
 
 
+# ---------- catalog cache + destination helpers (E2-S3) ----------
+
+def read_catalog_cache() -> dict:
+    """Return {fetched_at, books, facets} or an empty placeholder if
+    no refresh has been done yet."""
+    if not CATALOG_CACHE.exists():
+        return {"fetched_at": None, "books": [], "facets": {"languages": [], "categories": []}}
+    try:
+        data = json.loads(CATALOG_CACHE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"fetched_at": None, "books": [], "facets": {"languages": [], "categories": []}}
+    if not isinstance(data, dict):
+        return {"fetched_at": None, "books": [], "facets": {"languages": [], "categories": []}}
+    data.setdefault("fetched_at", None)
+    data.setdefault("books", [])
+    data.setdefault("facets", {"languages": [], "categories": []})
+    return data
+
+
+def fetch_catalog() -> tuple[bool, str, int]:
+    """Fetch + parse + cache the Kiwix catalog. Returns (ok, message,
+    book_count). Requires Ethernet uplink — fails fast with a friendly
+    error otherwise."""
+    if not detect_uplink().get("ethernet"):
+        return False, "No Ethernet uplink. Plug in a cable and try again.", 0
+
+    req = urllib.request.Request(CATALOG_URL, headers={"User-Agent": CATALOG_USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=CATALOG_FETCH_TIMEOUT) as resp:
+            xml_text = resp.read().decode("utf-8", errors="replace")
+    except urllib.error.URLError as exc:
+        return False, f"Couldn't reach library.kiwix.org: {exc}", 0
+    except (OSError, ValueError) as exc:
+        return False, f"Catalog fetch failed: {exc}", 0
+
+    books = catalog.parse_feed(xml_text)
+    if not books:
+        return False, "Catalog parse returned no books — upstream may have changed.", 0
+
+    facets = catalog.collect_facets(books)
+    payload = {
+        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "books": books,
+        "facets": facets,
+    }
+    CATALOG_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    tmp = CATALOG_CACHE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, separators=(",", ":")))
+    os.replace(tmp, CATALOG_CACHE)
+    return True, "ok", len(books)
+
+
+def destinations() -> list[dict]:
+    """Available download destinations. MVP: internal storage only.
+
+    USB destinations were tried during E2-S3 development and pulled
+    after Jon called the experience "a complete failure" — the
+    combination of slow vfat-on-USB writes, aria2's metalink resume
+    semantics, and the mount-namespace gymnastics needed to make
+    aria2c's writes hit the right thing produced too many edge cases.
+    Users wanting content on a USB drive can copy it from the SD
+    after download, or pre-load the drive from a laptop. The USB
+    write toggle on the Storage page (E4-S2 AC-5) is independent
+    and stays in place for other manual write workflows."""
+    out: list[dict] = []
+    free = _free_bytes(ZIM_BASE)
+    out.append({
+        "id": "sd",
+        "label": "Internal storage (SD card)",
+        "path": str(ZIM_BASE),
+        "free_bytes": free,
+        "writable": True,
+    })
+    return out
+
+
+def resolve_destination(dest_id: str) -> Optional[dict]:
+    """Look up one destination by id. None if not found / not currently
+    available (covers race where USB was just unplugged)."""
+    for d in destinations():
+        if d["id"] == dest_id:
+            return d
+    return None
+
+
+def _free_bytes(path: Path) -> int:
+    try:
+        stats = os.statvfs(path)
+    except OSError:
+        return 0
+    return stats.f_bavail * stats.f_frsize
+
+
+def fetch_mirror_urls(meta4_url: str) -> list[str]:
+    """Fetch + parse a Kiwix-style Metalink 4 file. Return the list of
+    direct mirror URLs (already sorted by priority).
+
+    Handing aria2 the mirror URLs directly sidesteps MirrorBrain's
+    `Link: rel=describedby` redirect, which otherwise tricks aria2
+    into downloading the .meta4 *as* the file (~3 KB of XML, where
+    we wanted the .zim). Aria2's `follow-metalink=false` setting
+    only affects metalinks given by URL, not ones discovered via
+    HTTP response headers, so we have to bypass the discovery path
+    entirely.
+    """
+    import xml.etree.ElementTree as ET
+    try:
+        req = urllib.request.Request(meta4_url, headers={"User-Agent": CATALOG_USER_AGENT})
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            xml_text = resp.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError) as exc:
+        raise HTTPException(status_code=502, detail=f"can't fetch metalink: {exc}")
+
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError as exc:
+        raise HTTPException(status_code=502, detail=f"metalink parse failed: {exc}")
+
+    ns = {"m": "urn:ietf:params:xml:ns:metalink"}
+    pairs: list[tuple[int, str]] = []
+    for url_node in root.iter("{urn:ietf:params:xml:ns:metalink}url"):
+        href = (url_node.text or "").strip()
+        if not href:
+            continue
+        try:
+            priority = int(url_node.get("priority", "100"))
+        except ValueError:
+            priority = 100
+        pairs.append((priority, href))
+    pairs.sort()
+    return [u for _p, u in pairs]
+
+
+def queue_summary() -> dict:
+    """Build the JSON the catalog page polls at 1 Hz. Wraps aria2 so
+    a daemon outage doesn't break the page — we just return an empty
+    queue with an `error` field for the UI to surface."""
+    try:
+        items = aria2.list_all()
+    except aria2.Aria2Error as exc:
+        return {"items": [], "error": str(exc)}
+    return {"items": items, "error": None}
+
+
 # ---------- routes ----------
 
 @app.get("/admin/healthz")
-async def healthz() -> dict:
+def healthz() -> dict:
     return {"ok": True}
 
 
 @app.get("/admin/uplink")
-async def uplink_state() -> dict:
+def uplink_state() -> dict:
     """JSON endpoint polled by admin.js to live-update the home banner.
     Same shape as the dict passed into the home template."""
     return detect_uplink()
@@ -183,7 +344,7 @@ async def uplink_state() -> dict:
 
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin/", response_class=HTMLResponse)
-async def admin_home(request: Request) -> HTMLResponse:
+def admin_home(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         "home.html",
         {"request": request, "active": "home", "uplink": detect_uplink()},
@@ -191,7 +352,7 @@ async def admin_home(request: Request) -> HTMLResponse:
 
 
 @app.get("/admin/network", response_class=HTMLResponse)
-async def network_get(
+def network_get(
     request: Request,
     saved: Optional[str] = None,
     reset: Optional[str] = None,
@@ -213,7 +374,7 @@ async def network_get(
 
 
 @app.post("/admin/network", response_class=HTMLResponse)
-async def network_post(
+def network_post(
     request: Request,
     ssid: str = Form(...),
     wifi_password: str = Form(""),
@@ -264,13 +425,13 @@ async def network_post(
 
 
 @app.get("/admin/health")
-async def health_state() -> dict:
+def health_state() -> dict:
     """Live snapshot polled by the storage page (E4-S2 AC-1, 1 Hz)."""
     return health_snapshot()
 
 
 @app.get("/admin/storage", response_class=HTMLResponse)
-async def storage_get(request: Request) -> HTMLResponse:
+def storage_get(request: Request) -> HTMLResponse:
     """Server-side renders the page so no-JS clients still see all
     the stats. The JS poll then keeps the values fresh."""
     snap = health_snapshot()
@@ -287,7 +448,7 @@ async def storage_get(request: Request) -> HTMLResponse:
 
 
 @app.post("/admin/storage/usb/{name}/writable")
-async def storage_usb_toggle(name: str, writable: bool = Form(...)):
+def storage_usb_toggle(name: str, writable: bool = Form(...)):
     if not USB_NAME_RE.match(name):
         raise HTTPException(status_code=400, detail="invalid usb name")
     payload = {"action": "remount", "name": name, "writable": writable}
@@ -300,7 +461,7 @@ async def storage_usb_toggle(name: str, writable: bool = Form(...)):
 
 
 @app.get("/admin/diagnostics")
-async def diagnostics_tarball():
+def diagnostics_tarball():
     """Produce a downloadable diagnostics tarball (E4-S2 AC-5).
 
     Streams a tar.gz containing the install log, recent journalctl
@@ -385,8 +546,196 @@ async def diagnostics_tarball():
     )
 
 
+# ---------- catalog page (E2-S3) ----------
+
+@app.get("/admin/catalog", response_class=HTMLResponse)
+def catalog_get(
+    request: Request,
+    refreshed: Optional[str] = None,
+    refresh_error: Optional[str] = None,
+) -> HTMLResponse:
+    cache = read_catalog_cache()
+    return templates.TemplateResponse(
+        "catalog.html",
+        {
+            "request": request,
+            "active": "catalog",
+            "fetched_at": cache.get("fetched_at"),
+            "book_count": len(cache.get("books") or []),
+            "destinations": destinations(),
+            "refreshed": refreshed == "1",
+            "refresh_error": refresh_error,
+            "format_bytes": health.format_bytes,
+        },
+    )
+
+
+@app.post("/admin/catalog/refresh")
+def catalog_refresh():
+    ok, msg, count = fetch_catalog()
+    if ok:
+        return RedirectResponse(f"/admin/catalog?refreshed=1", status_code=303)
+    # Bounce back with the error in the query string so the user sees
+    # a flash banner instead of a raw 5xx.
+    from urllib.parse import quote
+    return RedirectResponse(
+        f"/admin/catalog?refresh_error={quote(msg)}",
+        status_code=303,
+    )
+
+
+@app.get("/admin/catalog/data")
+def catalog_data() -> dict:
+    """Full catalog payload — books + facets + last-refresh timestamp.
+    Polled once per page-load by catalog.js (the dataset is too big to
+    inline into the HTML, ~1500 books)."""
+    return read_catalog_cache()
+
+
+@app.get("/admin/downloads")
+def downloads_get() -> dict:
+    """1 Hz queue snapshot for the catalog page's progress section."""
+    return queue_summary()
+
+
+@app.post("/admin/downloads/queue")
+def downloads_queue(
+    book_id: str = Form(...),
+    destination_id: str = Form(...),
+):
+    """Queue one ZIM for download. Validates against the catalog cache
+    AND the live destination list (drive may have been unplugged)."""
+    cache = read_catalog_cache()
+    book = next((b for b in cache.get("books") or [] if b.get("id") == book_id), None)
+    if book is None:
+        raise HTTPException(status_code=404, detail="book not in current catalog")
+
+    dest = resolve_destination(destination_id)
+    if dest is None:
+        raise HTTPException(status_code=400, detail="destination unavailable")
+
+    # Refuse duplicates of an in-flight download. If we let aria2 take
+    # the same URL twice it tries to write the same staging file from
+    # two sources; one aborts and cleans up the partial, which kills
+    # the OTHER download's resume state too. Cleared rows (status =
+    # complete / error / removed) don't block — the user can re-queue
+    # them after deleting the result.
+    try:
+        active = aria2.list_all()
+    except aria2.Aria2Error:
+        active = []
+    for it in active:
+        if it.get("status") in ("active", "waiting", "paused"):
+            if it.get("filename") == book["filename"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"'{book['filename']}' is already in the queue.",
+                )
+
+    # Refuse if the file already exists at the destination (already
+    # downloaded). User can delete it from the destination first if
+    # they really want to redownload.
+    final_path = Path(dest["path"]) / book["filename"]
+    if final_path.exists():
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"'{book['filename']}' is already on {dest['label']}. "
+                f"Delete it from the destination first if you want to redownload."
+            ),
+        )
+
+    # Pre-queue space check (E2-S3 explicit ask): warn the user before
+    # they start a download that won't fit.
+    if book["size_bytes"] > dest["free_bytes"]:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"{health.format_bytes(book['size_bytes'])} won't fit in "
+                f"{dest['label']} ({health.format_bytes(dest['free_bytes'])} free)."
+            ),
+        )
+
+    # aria2c auto-creates the destination dir at download time
+    # (default --auto-create-dir=true), running as the `prepperpi`
+    # user which owns /srv/prepperpi/zim. No mkdir needed here.
+    staging = f"{dest['path']}/.downloading"
+
+    # Resolve the metalink to direct mirror URLs ourselves. The OPDS
+    # feed advertises a `.zim.meta4` acquisition link, and aria2's
+    # default behaviour with metalinks (or even Link: rel=describedby
+    # discovered ones — `follow-metalink=false` doesn't suppress that
+    # path) is to split the download into a parent + child GID dance
+    # that breaks our pause/resume tracking. By fetching the metalink
+    # and handing aria2 the raw mirror URLs, the download is a single
+    # GID that pause/resume target correctly.
+    if book["url"].endswith(".meta4"):
+        mirror_urls = fetch_mirror_urls(book["url"])
+        if not mirror_urls:
+            raise HTTPException(
+                status_code=502,
+                detail="metalink had no mirror URLs",
+            )
+    else:
+        mirror_urls = [book["url"]]
+
+    try:
+        gid = aria2.add_uri(mirror_urls, dest_dir=staging, out=book["filename"])
+    except aria2.Aria2Error as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"gid": gid}
+
+
+@app.post("/admin/downloads/{gid}/pause")
+def downloads_pause(gid: str):
+    if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
+        raise HTTPException(status_code=400, detail="invalid gid")
+    try:
+        aria2.pause(gid)
+    except aria2.Aria2Error as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"ok": True}
+
+
+@app.post("/admin/downloads/{gid}/resume")
+def downloads_resume(gid: str):
+    if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
+        raise HTTPException(status_code=400, detail="invalid gid")
+    try:
+        aria2.unpause(gid)
+    except aria2.Aria2Error as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"ok": True}
+
+
+@app.post("/admin/downloads/{gid}/cancel")
+def downloads_cancel(gid: str):
+    if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
+        raise HTTPException(status_code=400, detail="invalid gid")
+    try:
+        aria2.remove(gid)
+    except aria2.Aria2Error as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"ok": True}
+
+
+@app.post("/admin/downloads/{gid}/clear")
+def downloads_clear(gid: str):
+    """Clear a finished (complete or error) download from the queue
+    history. Different from `cancel` which targets in-flight downloads;
+    this just removes the bookkeeping entry. The actual file (if any)
+    stays at the destination."""
+    if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
+        raise HTTPException(status_code=400, detail="invalid gid")
+    try:
+        aria2.remove_result(gid)
+    except aria2.Aria2Error as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+    return {"ok": True}
+
+
 @app.post("/admin/network/reset", response_class=HTMLResponse)
-async def network_reset(request: Request) -> HTMLResponse:
+def network_reset(request: Request) -> HTMLResponse:
     ok, msg = call_wrapper({"action": "reset"})
     if not ok:
         config = read_config()

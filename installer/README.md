@@ -13,9 +13,10 @@ Top-level PrepperPi installer. Pure bash, idempotent, safe to re-run.
    1. `prepperpi-ap` — Wi-Fi access point + DHCP/DNS
    2. `prepperpi-events` — shared event-emitter helper used by later services
    3. `prepperpi-web` — Caddy front door + landing page
-   4. `prepperpi-admin` — FastAPI/uvicorn admin console (Network panel)
-   5. `prepperpi-kiwix` — kiwix-serve + ZIM library indexer
-   6. `prepperpi-usb` — USB hot-plug mounting + Markdown renderer
+   4. `prepperpi-admin` — FastAPI/uvicorn admin console
+   5. `prepperpi-aria2c` — aria2c download daemon for the catalog page (E2-S3); installed after admin so it can chown its RPC secret to the `prepperpi-admin` group
+   6. `prepperpi-kiwix` — kiwix-serve + ZIM library indexer
+   7. `prepperpi-usb` — USB hot-plug mounting + Markdown renderer
 
    Each per-service script is responsible for apt installs, rendering systemd units, enabling services, etc.
 7. **Reboots** into AP mode.

@@ -492,6 +492,111 @@
 	justify-content: center;
 }
 
+/* Catalog page */
+.catalog-meta {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	flex-wrap: wrap;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.6rem 0.85rem;
+	margin: 1rem 0 1.5rem;
+	font-size: 0.9rem;
+}
+
+.catalog-refresh-form {
+	margin: 0;
+}
+
+.catalog-section {
+	margin: 1.5rem 0;
+}
+
+.catalog-filters {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0.6rem;
+}
+
+@media (min-width: 32rem) {
+	.catalog-filters { grid-template-columns: 1fr 1fr; }
+}
+
+@media (min-width: 50rem) {
+	.catalog-filters { grid-template-columns: 1fr 1fr 1fr 1fr; }
+}
+
+.catalog-filter {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	font-size: 0.85rem;
+}
+
+.catalog-filter span {
+	color: var(--ink-dim);
+}
+
+.catalog-count {
+	color: var(--ink-dim);
+	font-weight: normal;
+	font-size: 0.85rem;
+}
+
+.catalog-book {
+	margin-bottom: 0.5rem;
+}
+
+.catalog-book__summary {
+	margin: 0.4rem 0;
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+	line-height: 1.4;
+}
+
+.catalog-warn {
+	margin-left: 0.5rem;
+	color: #f55;
+	font-size: 0.8rem;
+	font-style: italic;
+}
+
+.catalog-pager {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	margin: 1rem 0;
+	justify-content: center;
+}
+
+.catalog-pager__page {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	color: var(--ink);
+	padding: 0.3rem 0.6rem;
+	border-radius: var(--radius);
+	cursor: pointer;
+	font-size: 0.85rem;
+	font-variant-numeric: tabular-nums;
+}
+
+.catalog-pager__page:hover {
+	background: var(--panel-dim);
+}
+
+.catalog-pager__page--active {
+	background: var(--accent);
+	color: #1a1000;
+	font-weight: 600;
+}
+
+.catalog-pager__page--active:hover {
+	background: var(--accent);
+}
+
 /* Reset / danger zone */
 .admin-danger-zone {
 	margin-top: 2.5rem;

@@ -71,10 +71,13 @@ install_files() {
   install -m 0644 "${SRC_DIR}/app/main.py"        "${APP_DST}/main.py"
   install -m 0644 "${SRC_DIR}/app/uplink.py"      "${APP_DST}/uplink.py"
   install -m 0644 "${SRC_DIR}/app/health.py"      "${APP_DST}/health.py"
+  install -m 0644 "${SRC_DIR}/app/aria2.py"       "${APP_DST}/aria2.py"
+  install -m 0644 "${SRC_DIR}/app/catalog.py"     "${APP_DST}/catalog.py"
   install -m 0644 "${SRC_DIR}/app/templates/base.html"    "${APP_DST}/templates/base.html"
   install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
   install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"
   install -m 0644 "${SRC_DIR}/app/templates/storage.html" "${APP_DST}/templates/storage.html"
+  install -m 0644 "${SRC_DIR}/app/templates/catalog.html" "${APP_DST}/templates/catalog.html"
   install -m 0644 "${SRC_DIR}/app/static/admin.css"       "${APP_DST}/static/admin.css"
   install -m 0644 "${SRC_DIR}/app/static/admin.js"        "${APP_DST}/static/admin.js"
 
@@ -109,6 +112,16 @@ install_landing_tile() {
   install -m 0644 "${SRC_DIR}/_admin.html" "${LANDING_DST}/_admin.html"
 }
 
+ensure_catalog_cache_dir() {
+  # The catalog cache lives under /srv/prepperpi/cache/. The admin
+  # daemon writes to it (E2-S3) — its systemd unit grants
+  # ReadWritePaths=/srv/prepperpi/cache. Owned by the admin user so
+  # writes don't need root; mode 0755 so other PrepperPi services
+  # can read the cache if they ever need to.
+  log "ensuring catalog cache dir /srv/prepperpi/cache/"
+  install -d -m 0755 -o "$ADMIN_USER" -g "$ADMIN_GROUP" /srv/prepperpi/cache
+}
+
 enable_units() {
   log "enabling prepperpi-admin.service"
   systemctl daemon-reload
@@ -129,6 +142,7 @@ main() {
   install_files
   install_sudoers
   install_landing_tile
+  ensure_catalog_cache_dir
   enable_units
   restart_units
   log "done. Admin console is active at /admin/."
