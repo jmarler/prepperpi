@@ -9,7 +9,14 @@ Top-level PrepperPi installer. Pure bash, idempotent, safe to re-run.
 3. **Logs every step** to `/var/log/prepperpi/install.log` via `tee`. Nothing is uploaded anywhere.
 4. **Creates the `prepperpi` service account** (`useradd --system`) if it doesn't already exist.
 5. **Creates the state tree** at `/srv/prepperpi/{zim,maps,media,user-usb,config,cache,backups}`, owned by `prepperpi:prepperpi`. Existing content is preserved.
-6. **Runs each `services/*/setup.sh`** in a fixed order (`prepperpi-ap`, `prepperpi-web` today; more as future stories land). Each per-service script is responsible for apt installs, rendering systemd units, enabling services, etc.
+6. **Runs each `services/*/setup.sh`** in a fixed order:
+   1. `prepperpi-ap` — Wi-Fi access point + DHCP/DNS
+   2. `prepperpi-events` — shared event-emitter helper used by later services
+   3. `prepperpi-web` — Caddy front door + landing page
+   4. `prepperpi-kiwix` — kiwix-serve + ZIM library indexer
+   5. `prepperpi-usb` — USB hot-plug mounting + Markdown renderer
+
+   Each per-service script is responsible for apt installs, rendering systemd units, enabling services, etc.
 7. **Reboots** into AP mode.
 
 ## Usage
@@ -52,5 +59,5 @@ If something goes wrong, the log plus `sudo journalctl -u 'prepperpi-*'` is the 
 ## Adding a new service
 
 1. Drop a `services/<name>/setup.sh` that's idempotent and executable.
-2. Add `<name>` to the `SERVICE_ORDER` array in `install.sh` at the correct position (dependencies first: `prepperpi-ap` before `prepperpi-web` before any kiwix / tiles services).
+2. Add `<name>` to the `SERVICE_ORDER` array in `install.sh` at the correct position. Dependency rule of thumb: `prepperpi-ap` first (network), then `prepperpi-events` (the event-emitter helper that later services call), then `prepperpi-web` (which seeds `/opt/prepperpi/web/landing/`), then any service that writes fragment files into the landing root or proxies through Caddy.
 3. The installer logs a WARN if it finds a `services/*/setup.sh` that isn't in `SERVICE_ORDER`, so you get caught if you forget step 2.
