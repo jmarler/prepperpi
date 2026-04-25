@@ -3,15 +3,67 @@
 {% block content %}
 <h2 class="admin-page__title">Offline maps</h2>
 <p class="admin-lede">
-  Regions installed under <code>/srv/prepperpi/maps/</code>. Each region is one
-  OpenMapTiles MBTiles file. Drop a new <code>.mbtiles</code> into that directory
-  and it appears here within a few seconds; deleting one here removes the file
-  and updates the live map.
+  Regions live under <code>/srv/prepperpi/maps/</code>. Pick a country (or a bundle of countries)
+  below and PrepperPi extracts just that region's tiles directly from the
+  <a href="https://download.mapterhorn.com/" rel="noopener">mapterhorn.com</a> daily planet
+  PMTiles. Each extract becomes a single <code>.pmtiles</code> file the live map at
+  <a href="/maps/" class="admin-link-out">/maps/</a> renders alongside any other regions you've installed.
 </p>
 
 {% if flash %}
 <div class="flash flash--{{ 'success' if flash.kind == 'ok' else 'error' }}" role="status">{{ flash.message }}</div>
 {% endif %}
+
+{# ---- Active install card (rendered/hidden by admin.js based on status) ---- #}
+<section id="maps-install-card" class="admin-card admin-install-card" hidden aria-live="polite">
+  <h3 class="admin-card__title">
+    Installing
+    <span id="maps-install-region-name" class="admin-install-region-name">…</span>
+  </h3>
+  <p class="admin-install-meta">
+    <span id="maps-install-status-label">Starting</span>
+    &middot; <span id="maps-install-progress-text">0 B / unknown</span>
+  </p>
+  <div class="admin-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+    <div id="maps-install-progress-bar" class="admin-progress__bar" style="width: 0%"></div>
+  </div>
+  <p class="admin-install-actions">
+    <button type="button" id="maps-install-cancel-btn" class="admin-btn admin-btn--danger">Cancel install</button>
+  </p>
+  <p class="admin-footnote">
+    pmtiles extract reads tiles from the source planet over HTTPS range requests, so the
+    download size approximates the final region size. The operation can't be paused —
+    cancelling discards the partial file and the next try starts fresh.
+  </p>
+</section>
+
+{# ---- Browse + install ---- #}
+<h3 class="admin-section-title">Available regions</h3>
+
+<div class="admin-bundles" data-maps-bundles>
+  <span class="admin-bundles__label">Quick-pick bundle:</span>
+  {# bundles populated by admin.js once /admin/maps/catalog is fetched #}
+</div>
+
+<p class="admin-summary">
+  Free disk space: <strong id="maps-free-space">…</strong>. Selected: <strong id="maps-selected-count">0</strong>
+  region(s), estimated <strong id="maps-selected-bytes">0 B</strong>.
+</p>
+
+<p class="admin-controls">
+  <input type="search" id="maps-filter" class="admin-search" placeholder="Filter by name or ISO code…" aria-label="Filter countries">
+  <button type="button" id="maps-install-selected-btn" class="admin-btn admin-btn--primary" disabled>
+    Install selected (one at a time)
+  </button>
+  <button type="button" id="maps-clear-selection-btn" class="admin-btn">Clear</button>
+</p>
+
+<div id="maps-catalog" class="admin-catalog" aria-live="polite">
+  <p class="admin-empty">Loading catalog…</p>
+</div>
+
+{# ---- Installed regions ---- #}
+<h3 class="admin-section-title">Installed</h3>
 
 {% if regions %}
 <p class="admin-summary">
@@ -36,7 +88,7 @@
     <tr>
       <td>
         <strong>{{ r.name }}</strong><br>
-        <code class="admin-code-muted">{{ r.region_id }}.mbtiles</code>
+        <code class="admin-code-muted">{{ r.region_id }}.{{ r.kind or 'mbtiles' }}</code>
         {% if r.description %}
         <p class="admin-row-desc">{{ r.description }}</p>
         {% endif %}
@@ -51,7 +103,7 @@
       </td>
       <td>
         <form method="post" action="/admin/maps/{{ r.region_id }}/delete"
-              onsubmit="return confirm('Delete region “{{ r.name|e }}”? This removes the .mbtiles file from disk.');">
+              onsubmit="return confirm('Delete region “{{ r.name|e }}”? This removes the file from disk.');">
           <button type="submit" class="admin-btn admin-btn--danger">Delete</button>
         </form>
       </td>
@@ -61,16 +113,13 @@
 </table>
 {% else %}
 <p class="admin-empty">
-  No regions installed yet. Drop an OpenMapTiles <code>.mbtiles</code> into
-  <code>/srv/prepperpi/maps/</code> (over SSH or the admin storage panel) and
-  refresh this page. A one-click downloader UI is coming in <strong>E3-S2</strong>.
+  No regions installed yet. Pick one from the catalog above, or drop a
+  <code>.pmtiles</code> / <code>.mbtiles</code> into <code>/srv/prepperpi/maps/</code> over SSH.
 </p>
 {% endif %}
 
 <p class="admin-footnote">
-  Each region's metadata (bounds, zoom range, attribution) is read from the
-  MBTiles file's own <code>metadata</code> table by the reindex service
-  (<code>prepperpi-tiles-reindex.service</code>) — what you see here is whatever
-  the file says about itself.
+  Source: © OpenStreetMap contributors via <a href="https://download.mapterhorn.com/" rel="noopener">mapterhorn.com</a>.
+  Size estimates are calibrated approximations (±50%); actual extracts may differ.
 </p>
 {% endblock %}

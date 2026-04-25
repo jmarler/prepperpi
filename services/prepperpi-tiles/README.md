@@ -1,18 +1,33 @@
 # prepperpi-tiles
 
-Offline vector map tile server (E3-S1). [tileserver-gl-light](https://github.com/maptiler/tileserver-gl) serves OpenMapTiles MBTiles from `/srv/prepperpi/maps/`, with a [MapLibre GL JS](https://maplibre.org) client served by Caddy at `/maps/`. Drop a `.mbtiles` into the maps directory and within a few seconds the landing page surfaces it, the live `/maps/` map renders it, and the [`prepperpi-admin`](../prepperpi-admin/) Maps panel lists it for one-click uninstall.
+Offline vector map tile server. [tileserver-gl-light](https://github.com/maptiler/tileserver-gl) serves MBTiles **and PMTiles** from `/srv/prepperpi/maps/`, with a [MapLibre GL JS](https://maplibre.org) client served by Caddy at `/maps/`. Drop a `.mbtiles` or `.pmtiles` into the maps directory (or use the [`prepperpi-admin`](../prepperpi-admin/) Maps panel to install one of ~200 catalogued countries) and within a few seconds the landing page surfaces it, the live `/maps/` map renders it, and the admin panel lists it for one-click uninstall.
+
+E3-S1 shipped the serving + composite-style pipeline. **E3-S2 added the catalog + downloader**: a static catalog of ISO countries grouped into bundles (NA / LATAM / EU / EMEA / APAC / Oceania / Russia / Antarctica), an admin UI to pick countries / bundles, and a worker that extracts the chosen region directly from the [mapterhorn.com daily planet PMTiles](https://download.mapterhorn.com/) over HTTP range requests via the [`pmtiles`](https://github.com/protomaps/go-pmtiles) tool.
 
 ## How it works
 
 ```
-  /srv/prepperpi/maps/{region}.mbtiles
+  Admin clicks "Install" on /admin/maps
+        │
+        ▼
+  POST /admin/maps/install (region_id=US)
+        │  validates (catalog, free space ×1.2, queue gate)
+        │  spawns detached worker:
+        ▼
+  /opt/.../prepperpi-tiles/extract-region.sh US
+        │  acquires lock at /srv/prepperpi/maps/.lock
+        │  writes status JSON: {region_id, status: extracting, bytes_so_far, …}
+        │  runs: pmtiles extract <source> <tmp> --bbox=...
+        │  polls partial-file size every 1s → updates status
+        │  on success: atomic mv .tmp/foo.partial → /srv/prepperpi/maps/foo.pmtiles
+        ▼
+  /srv/prepperpi/maps/{region}.{pmtiles,mbtiles}
         │  (path watcher)
         ▼
-  prepperpi-tiles-reindex.path
-        │  (oneshot)
-        ▼
-  prepperpi-tiles-reindex.service
-        │  reads each MBTiles' metadata table (sqlite),
+  prepperpi-tiles-reindex.path → .service
+        │  reads each region's metadata
+        │    MBTiles → SQLite metadata table
+        │    PMTiles → 127-byte header + JSON metadata blob
         │  writes:
         │    /etc/prepperpi/tileserver/config.json
         │    /etc/prepperpi/tileserver/styles/osm-bright/style.json   ← composite
@@ -32,6 +47,16 @@ Offline vector map tile server (E3-S1). [tileserver-gl-light](https://github.com
 
 The reindex script is the **single writer** of the composite style and the regions JSON; everything else (tileserver, admin, landing page) is a reader. That keeps the data flow one-way and easy to reason about.
 
+## E3-S2 downloader behavior
+
+A few things to know about the downloader, which differs from the [aria2-driven ZIM downloader](../prepperpi-aria2c/):
+
+- **One-shot extract, no pause/resume.** `pmtiles extract` is a single HTTP-range-driven operation that writes a `.partial` file. If interrupted (cancel, power flap, network blip) the partial is invalid and the next attempt starts from scratch. Cancel works; pause does not. For most countries (~50–500 MB / 5–15 min on broadband) this is fine; the few giant countries (US ≈ 1.5 GB / Russia ≈ 1.2 GB / China ≈ 1 GB) become 30+ min jobs that you don't want to interrupt.
+- **One install at a time.** The wrapper acquires a lock at `/srv/prepperpi/maps/.lock`. Bundles are processed by the browser-side queue (`admin.js` block 4) firing one country after the previous completes — close the admin tab and the queue stops, but anything already in flight finishes.
+- **Trust-the-source integrity.** No SHA-256 check (per the AC-3 drop) — the `pmtiles` tool refuses to write malformed output, and we re-verify the PMTiles magic before publishing. That's the integrity envelope.
+- **Sizes are estimates.** `regions.json` ships pre-computed estimates (±50%) so the AC-2 size and AC-4 free-space warning have something to show. Estimates can drift as the source planet grows.
+- **Fresh-source via re-install.** No "check for updates" yet. If you want refreshed data after a few weeks, delete the region from the admin panel and re-install — the next extract pulls from whatever the current daily planet has.
+
 ## Composite style (AC-3)
 
 OSM-Bright assumes one vector source named `openmaptiles`. To overlay multiple regional MBTiles seamlessly, the reindex script transforms the upstream style template:
@@ -46,7 +71,10 @@ Pure `dict → dict` transform; the regression battery lives in [`tests/unit/tes
 
 | Path                                  | Role                                              |
 | ------------------------------------- | ------------------------------------------------- |
-| `tiles_indexer.py`                    | Pure-ish library: MBTiles metadata reader, composite-style builder, tileserver config builder, landing-fragment renderer. Unit-tested. |
+| `tiles_indexer.py`                    | Pure-ish library: MBTiles **and PMTiles** metadata reader, composite-style builder, tileserver config builder, landing-fragment renderer. Unit-tested. |
+| `regions.json`                        | Static catalog (~200 ISO countries × bundles) used by the E3-S2 downloader. |
+| `extract-region.sh`                   | Worker invoked by the admin. Locks, runs `pmtiles extract`, polls progress, atomic-publishes. |
+| `bin/pmtiles`                         | go-pmtiles binary (installed at setup time, ARM64 only). |
 | `build-tiles-index.py`                | Orchestrator. Parses CLI args, calls `tiles_indexer`, writes outputs atomically. |
 | `build-tiles-index.sh`                | Shell wrapper. Invoked by the reindex unit. Runs the Python orchestrator, restarts the tileserver, emits the dashboard event. |
 | `client/index.html`                   | MapLibre app shell + `<noscript>` fallback (AC-5). |
@@ -91,8 +119,9 @@ Bumped in [`setup.sh`](setup.sh):
 | --------------------------- | ------- | ------------------------------------------------ |
 | `tileserver-gl-light`       | 5.0.0   | `npm` (locally installed under `node_modules/`)  |
 | `maplibre-gl` JS + CSS      | 4.7.1   | `https://unpkg.com/maplibre-gl@<v>`              |
-| `osm-bright-gl-style`       | v1.10   | github.com/openmaptiles/osm-bright-gl-style/releases |
-| `openmaptiles/fonts`        | v2.0    | github.com/openmaptiles/fonts/releases           |
+| `osm-bright-gl-style`       | v1.20   | github.com/openmaptiles/osm-bright-gl-style/releases |
+| Glyph PBFs (Noto Sans)      | bundled | `tileserver-gl-styles` (transitive npm dep)      |
+| `go-pmtiles`                | 1.30.2  | github.com/protomaps/go-pmtiles/releases (ARM64) |
 
 Downloads are cached under `/var/lib/prepperpi/maps/cache/` so a re-run on the dev Pi over SSH doesn't re-download. There's no SHA256 verification — we trust GitHub's TLS and the threat model isn't a maptiler supply-chain attack.
 

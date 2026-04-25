@@ -716,3 +716,200 @@
 	background: rgba(220, 50, 50, 0.15);
 	color: #fff;
 }
+
+.admin-btn--primary {
+	background: var(--accent);
+	color: #1a1000;
+	border-color: var(--accent);
+	font-weight: 600;
+}
+
+.admin-btn--primary:hover { filter: brightness(1.1); }
+.admin-btn--primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- /admin/maps E3-S2 install UI ---- */
+
+.admin-section-title {
+	margin-top: 1.5rem;
+	font-size: 1.05rem;
+	color: var(--ink);
+	border-bottom: 1px solid var(--border);
+	padding-bottom: 0.3rem;
+}
+
+.admin-install-card {
+	margin: 1rem 0;
+	padding: 1rem;
+	background: var(--panel);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+}
+
+.admin-install-region-name {
+	color: var(--accent);
+	font-weight: 700;
+}
+
+.admin-install-meta {
+	margin: 0.4rem 0 0.6rem;
+	font-size: 0.9rem;
+	color: var(--ink-dim);
+}
+
+.admin-progress {
+	height: 0.6rem;
+	background: var(--panel-dim);
+	border-radius: 999px;
+	overflow: hidden;
+	margin: 0.5rem 0;
+}
+
+.admin-progress__bar {
+	height: 100%;
+	background: var(--accent);
+	transition: width 0.4s ease-out;
+}
+
+.admin-install-actions { margin-top: 0.5rem; }
+
+.admin-bundles {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem;
+	align-items: center;
+	margin: 0.75rem 0;
+}
+
+.admin-bundles__label {
+	font-size: 0.9rem;
+	color: var(--ink-dim);
+	margin-right: 0.25rem;
+}
+
+.admin-bundles__btn {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	color: var(--ink);
+	padding: 0.3rem 0.6rem;
+	border-radius: var(--radius);
+	cursor: pointer;
+	font-size: 0.85rem;
+}
+
+.admin-bundles__btn:hover {
+	background: var(--panel-dim);
+	border-color: var(--accent);
+}
+
+.admin-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	align-items: center;
+	margin: 0.75rem 0;
+}
+
+.admin-search {
+	flex: 1 1 12rem;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	color: var(--ink);
+	padding: 0.4rem 0.6rem;
+	border-radius: var(--radius);
+	font-size: 0.95rem;
+}
+
+.admin-catalog {
+	margin: 0.5rem 0 1rem;
+}
+
+.admin-catalog-grid {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0.25rem;
+	max-height: 28rem;
+	overflow-y: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.25rem;
+	background: var(--panel-dim);
+}
+
+@media (min-width: 40rem) {
+	.admin-catalog-grid { grid-template-columns: 1fr 1fr; }
+}
+
+.admin-catalog-row__label {
+	display: grid;
+	grid-template-columns: 1.25rem 2.4rem 1fr auto auto;
+	gap: 0.5rem;
+	align-items: center;
+	padding: 0.3rem 0.5rem;
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.admin-catalog-row__label:hover { background: var(--panel); }
+
+.admin-catalog-row__iso {
+	font-family: ui-monospace, monospace;
+	font-size: 0.8rem;
+	color: var(--ink-dim);
+	letter-spacing: 0.04em;
+}
+
+.admin-catalog-row__name {
+	font-size: 0.95rem;
+}
+
+.admin-catalog-row__size {
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+	font-variant-numeric: tabular-nums;
+}
+
+.admin-catalog-row__state {
+	font-size: 0.8rem;
+	color: var(--accent);
+	font-style: italic;
+}
+
+.admin-catalog-row--installed .admin-catalog-row__label {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+/* Floating toasts (admin pages don't ship the landing-page toast
+ * container; we inject our own when needed). */
+.admin-toasts {
+	position: fixed;
+	bottom: 1rem;
+	right: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	z-index: 99;
+	pointer-events: none;
+}
+
+.admin-toast {
+	background: var(--panel);
+	border: 1px solid var(--accent);
+	color: var(--ink);
+	padding: 0.6rem 0.9rem;
+	border-radius: var(--radius);
+	font-size: 0.9rem;
+	max-width: 22rem;
+	box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+	opacity: 0;
+	transform: translateY(0.6rem);
+	transition: opacity 0.25s, transform 0.25s;
+}
+
+.admin-toast--visible {
+	opacity: 1;
+	transform: translateY(0);
+}
