@@ -177,3 +177,48 @@ body {
 	color: var(--ink-dim);
 	text-decoration: underline;
 }
+
+/* Fragment wrappers carry no visual weight: their <article> /
+ * <form> children must participate directly in the parent grid /
+ * flow. `display: contents` is supported in every browser PrepperPi
+ * targets (Pi OS Lite + modern phone browsers). */
+[data-fragment] {
+	display: contents;
+}
+
+/* Toast notifications. Top-center on mobile (where the dashboard is
+ * primarily used), still readable on desktop. Live updates from
+ * dashboard.js append .toast elements; the .toast--visible class is
+ * added a frame later so the transition animates. */
+.toast-container {
+	position: fixed;
+	top: 0.75rem;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1000;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	pointer-events: none;
+	width: max-content;
+	max-width: calc(100% - 1.5rem);
+}
+
+.toast {
+	background: var(--panel);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	padding: 0.6rem 1rem;
+	color: var(--ink);
+	font-size: 0.9rem;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+	opacity: 0;
+	transform: translateY(-0.5rem);
+	transition: opacity 0.3s ease, transform 0.3s ease;
+	pointer-events: auto;
+}
+
+.toast--visible {
+	opacity: 1;
+	transform: translateY(0);
+}

@@ -9,8 +9,25 @@ set -euo pipefail
 readonly DEV_NAME="${1:?usage: $0 <kernel-name>}"
 readonly DEV_PATH="/dev/${DEV_NAME}"
 readonly MOUNT_BASE="${MOUNT_BASE:-/srv/prepperpi/user-usb}"
+readonly LABEL_FILE="/run/prepperpi/usb-${DEV_NAME}.label"
 
 log() { printf '[prepperpi-usb-unmount] %s\n' "$*"; }
+
+# Pull the label that prepperpi-usb-mount.sh stashed away on plug-in,
+# so the user-facing toast can name the drive that just left. Falls
+# back to the kernel device name when missing (older mount, manual
+# tinkering, etc.).
+USB_LABEL="$DEV_NAME"
+if [[ -f "$LABEL_FILE" ]]; then
+  USB_LABEL=$(cat "$LABEL_FILE" 2>/dev/null || true)
+  [[ -z "$USB_LABEL" ]] && USB_LABEL="$DEV_NAME"
+  rm -f "$LABEL_FILE"
+fi
+
+if [[ -x /opt/prepperpi/services/prepperpi-events/emit-event.py ]]; then
+  /opt/prepperpi/services/prepperpi-events/emit-event.py \
+    usb_unplugged "USB drive '${USB_LABEL}' removed · re-indexing…" || true
+fi
 
 # Find any mountpoints that point at this device. findmnt's --source
 # is exact-match against the kernel mount table.

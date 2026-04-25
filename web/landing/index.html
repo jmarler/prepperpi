@@ -13,10 +13,10 @@
 	<p class="tagline">Offline knowledge, served from the box in front of you.</p>
 </header>
 
-{{include "/_library_search.html"}}
+<div data-fragment="library_search">{{include "/_library_search.html"}}</div>
 
 <main class="tiles" aria-label="Content modules">
-	{{include "/_library.html"}}
+	<div data-fragment="library">{{include "/_library.html"}}</div>
 
 	<article class="tile tile--unavailable" aria-labelledby="tile-maps-title">
 		<div class="tile__icon" aria-hidden="true">🗺️</div>
@@ -32,12 +32,16 @@
 		<p class="tile__status">Not installed &mdash; shipping in a later release.</p>
 	</article>
 
-	{{include "/_usb.html"}}
+	<div data-fragment="usb">{{include "/_usb.html"}}</div>
 </main>
+
+<div id="prepperpi-toasts" class="toast-container" aria-live="polite" aria-atomic="false"></div>
 
 <footer class="site-footer">
 	<p>PrepperPi is a free, MIT-0-licensed DIY offline reference server. No accounts, no telemetry, no internet required.</p>
 	<p><a href="https://github.com/jmarler/prepperpi">github.com/jmarler/prepperpi</a></p>
 </footer>
+
+<script src="/dashboard.js" defer></script>
 </body>
 </html>

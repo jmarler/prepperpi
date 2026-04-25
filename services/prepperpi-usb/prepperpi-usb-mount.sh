@@ -90,3 +90,14 @@ case "$FSTYPE" in
 esac
 
 log "mounted $DEV_PATH at $MOUNT_PATH (type=$FSTYPE, label=${LABEL:-<none>})"
+
+# Stash the resolved volume name so the unmount script can put it
+# in the user-facing toast even after the device is gone.
+mkdir -p /run/prepperpi
+printf '%s' "$NAME" >"/run/prepperpi/usb-${DEV_NAME}.label"
+
+# Tell the dashboard. Best-effort; missing emitter is a no-op.
+if [[ -x /opt/prepperpi/services/prepperpi-events/emit-event.py ]]; then
+  /opt/prepperpi/services/prepperpi-events/emit-event.py \
+    usb_plugged "USB drive '${NAME}' connected · re-indexing…" || true
+fi

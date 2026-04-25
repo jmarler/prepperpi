@@ -76,8 +76,9 @@ install_files() {
 
   log "installing landing page to ${WEB_DST}"
   install -d -m 0755 "$WEB_DST"
-  install -m 0644 "${WEB_SRC}/index.html" "${WEB_DST}/index.html"
-  install -m 0644 "${WEB_SRC}/style.css"  "${WEB_DST}/style.css"
+  install -m 0644 "${WEB_SRC}/index.html"    "${WEB_DST}/index.html"
+  install -m 0644 "${WEB_SRC}/style.css"     "${WEB_DST}/style.css"
+  install -m 0644 "${WEB_SRC}/dashboard.js"  "${WEB_DST}/dashboard.js"
 
   log "installing systemd unit"
   install -m 0644 "${SRC_DIR}/prepperpi-web.service" /etc/systemd/system/prepperpi-web.service

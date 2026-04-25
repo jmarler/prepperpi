@@ -16,6 +16,8 @@ readonly USB_DIR="${USB_DIR:-/srv/prepperpi/user-usb}"
 readonly LIB_XML="${LIB_XML:-/var/lib/prepperpi/library.xml}"
 readonly FRAGMENT="${FRAGMENT:-/opt/prepperpi/web/landing/_library.html}"
 readonly SEARCH_FRAGMENT="${SEARCH_FRAGMENT:-/opt/prepperpi/web/landing/_library_search.html}"
+readonly STATE_FILE="${STATE_FILE:-/var/lib/prepperpi/last-library-state.txt}"
+readonly EVENT_EMITTER="${EVENT_EMITTER:-/opt/prepperpi/services/prepperpi-events/emit-event.py}"
 readonly SERVICE_USER="${SERVICE_USER:-prepperpi}"
 readonly SERVICE_GROUP="${SERVICE_GROUP:-prepperpi}"
 
@@ -205,6 +207,22 @@ rebuild_fragment() {
     fi
     count=$((count + 1))
     ids+=("$id")
+    # Storage location indicator: tells the user whether the ZIM
+    # lives on the SD card or on a removable USB. Helpful for
+    # capacity planning ("can I yank this USB?") and trust
+    # decisions ("is this content going to disappear?").
+    local storage_txt
+    case "$abs_path" in
+      "$USB_DIR"/*)
+        local volume
+        volume="${abs_path#$USB_DIR/}"
+        volume="${volume%%/*}"
+        storage_txt="$size_h on external USB ($(html_escape "$volume"))"
+        ;;
+      *)
+        storage_txt="$size_h on internal disk"
+        ;;
+    esac
     {
       printf '<article class="tile tile--library" aria-labelledby="tile-zim-%s-title">\n' "$(html_escape "$slug")"
       printf '  <div class="tile__icon" aria-hidden="true">📖</div>\n'
@@ -212,7 +230,7 @@ rebuild_fragment() {
       printf '    <a href="/library/viewer#%s">%s</a>\n' "$(html_escape "$slug")" "$(html_escape "$title")"
       printf '  </h2>\n'
       printf '  <p class="tile__desc">%s</p>\n' "$articles_txt"
-      printf '  <p class="tile__status">%s on disk</p>\n' "$(html_escape "$size_h")"
+      printf '  <p class="tile__status">%s</p>\n' "$storage_txt"
       printf '</article>\n'
     } >>"$tiles_tmp"
   done < <(library_entries)
@@ -264,6 +282,43 @@ reload_kiwix() {
   fi
 }
 
+# Emit a `library_changed` event if the set of indexed ZIMs differs
+# from the previous run. We compare the sorted list of book IDs
+# (UUIDs) snapshot-to-snapshot. Used so the dashboard can surface
+# a single "Library updated" toast when something actually changed,
+# without firing on every ctime tick (each USB plug-in fires the
+# path watcher even for drives that contain no ZIMs).
+emit_library_change_event() {
+  [[ -x "$EVENT_EMITTER" ]] || return 0
+  install -d -m 0755 "$(dirname "$STATE_FILE")"
+
+  local current previous
+  current=$(grep -oE 'id="[^"]+"' "$LIB_XML" 2>/dev/null | sort -u || true)
+  previous=$(cat "$STATE_FILE" 2>/dev/null || true)
+
+  if [[ "$current" == "$previous" ]]; then
+    return 0
+  fi
+
+  printf '%s\n' "$current" >"$STATE_FILE"
+
+  local cur_count prev_count
+  cur_count=$(printf '%s\n' "$current" | grep -c '^id=' || true)
+  prev_count=$(printf '%s\n' "$previous" | grep -c '^id=' || true)
+
+  local msg
+  if (( cur_count == 0 )); then
+    msg="Library cleared"
+  elif (( cur_count > prev_count )); then
+    msg="Library updated · ${cur_count} book$([[ $cur_count -eq 1 ]] && echo '' || echo 's')"
+  elif (( cur_count < prev_count )); then
+    msg="Library updated · ${cur_count} book$([[ $cur_count -eq 1 ]] && echo '' || echo 's') remaining"
+  else
+    msg="Library updated"
+  fi
+  "$EVENT_EMITTER" library_changed "$msg" || true
+}
+
 main() {
   if [[ $EUID -ne 0 ]]; then
     echo "build-library-index.sh must be run as root" >&2
@@ -273,6 +328,7 @@ main() {
   rebuild_library_xml
   rebuild_fragment
   reload_kiwix
+  emit_library_change_event
 }
 
 main "$@"
