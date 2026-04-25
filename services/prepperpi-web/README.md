@@ -17,6 +17,8 @@ Caddy-based web front for PrepperPi. Serves the captive-portal probe responses, 
 - **Landing page** at `/` — `web/landing/index.html` served from `/opt/prepperpi/web/landing/`, processed through Caddy's `templates` directive so each `{{include "/_<frag>.html"}}` call inlines the latest tile fragment maintained by another service.
 - **`/admin/*`** — reverse-proxied to the FastAPI admin app on `127.0.0.1:8090`, **but only when the request's source IP is in `10.42.0.0/24` (the AP subnet) or `127.0.0.1` / `::1`**. Off-subnet requests get a `403` at the Caddy layer before hitting uvicorn. Maintained by [`prepperpi-admin`](../prepperpi-admin/).
 - **`/library/*`** — reverse-proxied to `kiwix-serve` on `127.0.0.1:8088`. Maintained by [`prepperpi-kiwix`](../prepperpi-kiwix/).
+- **`/maps/{styles,data,fonts,sprites}/*`** — reverse-proxied to `tileserver-gl-light` on `127.0.0.1:8083` after `uri strip_prefix /maps`. Vector tiles, glyphs, sprites, and the composite style live here. Maintained by [`prepperpi-tiles`](../prepperpi-tiles/).
+- **`/maps/*`** (everything else) — static MapLibre GL JS client served from `/opt/prepperpi/services/prepperpi-tiles/client/`. Maintained by [`prepperpi-tiles`](../prepperpi-tiles/).
 - **`/usb/*.md`** — reverse-proxied to the Python markdown daemon on `127.0.0.1:8089`. Maintained by [`prepperpi-usb`](../prepperpi-usb/).
 - **`/usb/*`** (everything else) — `file_server browse` rooted at `/srv/prepperpi/user-usb/`. Directory listings, range requests, native MIME for PDFs/images/video/audio.
 - **`/_events.json`** — a small JSON ring buffer (last 50 events) written by reindex services and polled by `dashboard.js` for the live toast notifications. Maintained by [`prepperpi-events`](../prepperpi-events/).
@@ -31,6 +33,8 @@ The landing-page `index.html` is processed by Caddy's `templates` directive. Sev
 | `_library.html` | [`prepperpi-kiwix`](../prepperpi-kiwix/) | One tile per ZIM in the library, plus the empty-state tile. |
 | `_library_search.html` | [`prepperpi-kiwix`](../prepperpi-kiwix/) | Cross-library search form (omitted entirely when the library is empty). |
 | `_usb.html` | [`prepperpi-usb`](../prepperpi-usb/) | One tile per mounted USB volume, or the empty-state tile. |
+| `_maps.html` | [`prepperpi-tiles`](../prepperpi-tiles/) | Maps tile — links to `/maps/` when one or more regions are installed, otherwise the empty-state tile. |
+| `_admin.html` | [`prepperpi-admin`](../prepperpi-admin/) | Admin tile shipped with the landing page itself; the admin service doesn't currently rewrite it. |
 | `_events.json` | [`prepperpi-events`](../prepperpi-events/) | Static-served event log. |
 
 Each `{{include}}` call in `index.html` is wrapped in a `<div data-fragment="<name>">` so [`dashboard.js`](../../web/landing/dashboard.js) can DOM-swap the fragment in place without reloading the page when an event fires. The wrappers use `display: contents` so they don't disturb the CSS grid.

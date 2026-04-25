@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Maps · PrepperPi Admin{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Offline maps</h2>
+<p class="admin-lede">
+  Regions installed under <code>/srv/prepperpi/maps/</code>. Each region is one
+  OpenMapTiles MBTiles file. Drop a new <code>.mbtiles</code> into that directory
+  and it appears here within a few seconds; deleting one here removes the file
+  and updates the live map.
+</p>
+
+{% if flash %}
+<div class="flash flash--{{ 'success' if flash.kind == 'ok' else 'error' }}" role="status">{{ flash.message }}</div>
+{% endif %}
+
+{% if regions %}
+<p class="admin-summary">
+  <strong>{{ regions | length }}</strong>
+  region{% if regions|length != 1 %}s{% endif %} installed,
+  total <strong>{{ total_size_human }}</strong>.
+  <a href="/maps/" class="admin-link-out">Open map &rarr;</a>
+</p>
+
+<table class="admin-table admin-table--maps">
+  <thead>
+    <tr>
+      <th scope="col">Region</th>
+      <th scope="col">Size</th>
+      <th scope="col">Zoom</th>
+      <th scope="col">Bounds</th>
+      <th scope="col">Action</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in regions %}
+    <tr>
+      <td>
+        <strong>{{ r.name }}</strong><br>
+        <code class="admin-code-muted">{{ r.region_id }}.mbtiles</code>
+        {% if r.description %}
+        <p class="admin-row-desc">{{ r.description }}</p>
+        {% endif %}
+      </td>
+      <td>{{ r.size_human }}</td>
+      <td>{{ r.minzoom }}–{{ r.maxzoom }}</td>
+      <td class="admin-cell-bounds">
+        W {{ "%.2f"|format(r.bounds[0]) }},
+        S {{ "%.2f"|format(r.bounds[1]) }}<br>
+        E {{ "%.2f"|format(r.bounds[2]) }},
+        N {{ "%.2f"|format(r.bounds[3]) }}
+      </td>
+      <td>
+        <form method="post" action="/admin/maps/{{ r.region_id }}/delete"
+              onsubmit="return confirm('Delete region “{{ r.name|e }}”? This removes the .mbtiles file from disk.');">
+          <button type="submit" class="admin-btn admin-btn--danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="admin-empty">
+  No regions installed yet. Drop an OpenMapTiles <code>.mbtiles</code> into
+  <code>/srv/prepperpi/maps/</code> (over SSH or the admin storage panel) and
+  refresh this page. A one-click downloader UI is coming in <strong>E3-S2</strong>.
+</p>
+{% endif %}
+
+<p class="admin-footnote">
+  Each region's metadata (bounds, zoom range, attribution) is read from the
+  MBTiles file's own <code>metadata</code> table by the reindex service
+  (<code>prepperpi-tiles-reindex.service</code>) — what you see here is whatever
+  the file says about itself.
+</p>
+{% endblock %}

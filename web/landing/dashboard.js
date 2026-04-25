@@ -24,6 +24,7 @@
     usb_plugged: ["usb", "library", "library_search"],
     usb_unplugged: ["usb", "library", "library_search"],
     library_changed: ["library", "library_search"],
+    maps_changed: ["maps"],
   };
 
   var lastVersion = null;

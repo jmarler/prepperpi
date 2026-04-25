@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=4, user-scalable=yes">
+<meta name="description" content="PrepperPi — offline vector map of installed regions.">
+<title>Maps · PrepperPi</title>
+<link rel="stylesheet" href="/maps/maplibre-gl.css">
+<link rel="stylesheet" href="/maps/map.css">
+</head>
+<body>
+
+<header class="map-header">
+  <a class="map-header__home" href="/" aria-label="Back to PrepperPi home">&larr; Home</a>
+  <h1 class="map-header__title">Maps</h1>
+</header>
+
+<main class="map-main">
+  <div id="map" class="map-canvas" aria-label="Vector map of installed regions"></div>
+
+  <div id="map-empty" class="map-empty" hidden>
+    <h2>No regions installed</h2>
+    <p>Drop an OpenMapTiles <code>.mbtiles</code> file into <code>/srv/prepperpi/maps/</code>,
+       or use the <a href="/admin/maps">Admin &rarr; Maps</a> page once a downloader is wired
+       up (Epic 3 / Story 2).</p>
+  </div>
+
+  <noscript>
+    <div class="map-fallback">
+      <h2>Maps require JavaScript</h2>
+      <!-- AC-5 fallback. Inline SVG keeps the page non-blank without
+           shipping a separate raster asset. The shape is intentionally
+           minimal — just enough to convey "this is where a map would be"
+           when JS is disabled. Real interactive use needs the MapLibre
+           client, which is loaded by map.js below. -->
+      <svg class="map-fallback__art" viewBox="0 0 360 180" role="img"
+           aria-label="Stylized world map">
+        <rect width="360" height="180" fill="#cbe3f4"/>
+        <g fill="#7fa46a" stroke="#5a7c4a" stroke-width="0.6">
+          <path d="M40 80 Q60 60 90 70 T140 90 Q150 110 130 130 T70 140 Q40 130 35 110 Z"/>
+          <path d="M180 60 Q200 50 230 60 T270 70 Q290 80 280 100 T240 120 Q200 130 195 110 T180 80 Z"/>
+          <path d="M270 110 Q295 105 310 120 T320 145 Q310 160 290 155 T270 130 Z"/>
+          <path d="M105 35 Q140 25 175 35 T210 35 Q220 50 200 55 T120 50 Z"/>
+          <path d="M315 30 Q335 30 345 50 T335 70 Q315 60 315 45 Z"/>
+        </g>
+      </svg>
+      <p>Enable JavaScript and reload to pan and zoom the live map. Static fallback shown above.</p>
+      <p><a href="/admin/maps">Admin &rarr; Maps</a> lists installed regions.</p>
+    </div>
+  </noscript>
+</main>
+
+<script src="/maps/maplibre-gl.js"></script>
+<script src="/maps/map.js"></script>
+
+</body>
+</html>

@@ -143,6 +143,39 @@
 			reverse_proxy 127.0.0.1:8088
 		}
 
+		# ---- 2c. Maps (tileserver-gl-light data plane) ----
+		# tileserver-gl-light listens on 127.0.0.1:8083 and serves
+		# its own URL tree -- /styles/, /data/, /fonts/, /sprites/.
+		# We expose it under the /maps/ prefix so a single Caddy
+		# route family handles both the data and the static client.
+		# `uri strip_prefix /maps` rewrites e.g. /maps/data/foo to
+		# /data/foo before the reverse_proxy fires, which is what
+		# the tileserver expects internally. The matching tileserver
+		# `--public_url=http://prepperpi.home.arpa/maps/` flag makes
+		# it generate fully-qualified URLs in style.json that match.
+		@maps_assets path /maps/styles/* /maps/data/* /maps/fonts/* /maps/sprites/*
+		handle @maps_assets {
+			uri strip_prefix /maps
+			reverse_proxy 127.0.0.1:8083
+		}
+
+		# ---- 2d. Maps (static MapLibre client) ----
+		# Everything else under /maps/ is the MapLibre client app
+		# (index.html, map.js, map.css, maplibre-gl.{js,css}). We
+		# serve it from /opt/prepperpi/services/prepperpi-tiles/client/.
+		# `try_files` falls through to /index.html so deep paths
+		# (none today, but future routing for /maps/region/<id>)
+		# don't 404.
+		@maps_root path /maps
+		handle @maps_root {
+			redir /maps/ permanent
+		}
+		handle_path /maps/* {
+			root * /opt/prepperpi/services/prepperpi-tiles/client
+			try_files {path} /index.html
+			file_server
+		}
+
 		# ---- 3. Off-host bounce ----
 		# A client reaching us via any DNS-hijacked probe hostname
 		# (e.g. captive.apple.com), or typing the raw IP, is

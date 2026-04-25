@@ -1,0 +1,40 @@
+[Unit]
+Description=PrepperPi — tileserver-gl-light (offline vector map tile server)
+Documentation=https://github.com/jmarler/prepperpi
+After=network.target
+# Caddy reverse-proxies /maps/{styles,data,fonts,sprites}/* here. Bound
+# only to 127.0.0.1 so the daemon is never reachable except through
+# the Caddy front door.
+
+[Service]
+Type=simple
+User=prepperpi
+Group=prepperpi
+WorkingDirectory=/etc/prepperpi/tileserver
+ExecStart=/usr/bin/node /opt/prepperpi/services/prepperpi-tiles/node_modules/tileserver-gl-light/src/main.js \
+  --config /etc/prepperpi/tileserver/config.json \
+  --port 8083 \
+  --bind 127.0.0.1 \
+  --public_url http://prepperpi.home.arpa/maps/ \
+  --silent
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. tileserver-gl-light needs to read MBTiles under
+# /srv/prepperpi/maps and its own config / asset tree. Nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadOnlyPaths=/srv/prepperpi/maps /etc/prepperpi/tileserver /opt/prepperpi/services/prepperpi-tiles
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+
+[Install]
+WantedBy=multi-user.target

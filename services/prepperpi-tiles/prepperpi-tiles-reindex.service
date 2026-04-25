@@ -1,0 +1,12 @@
+[Unit]
+Description=PrepperPi — rebuild tileserver config + composite style + landing tile
+Documentation=https://github.com/jmarler/prepperpi
+
+[Service]
+Type=oneshot
+# Runs as root so it can write /etc/prepperpi/tileserver/{config.json,
+# styles/osm-bright/style.json}, /opt/prepperpi/web/landing/_maps.html,
+# and restart prepperpi-tiles.service. The script itself is pure-ish:
+# its core (region discovery + style emission) lives in build_tiles_index.py
+# and is unit-tested. The shell wrapper just does I/O glue.
+ExecStart=/opt/prepperpi/services/prepperpi-tiles/build-tiles-index.sh

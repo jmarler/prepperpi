@@ -41,8 +41,11 @@ ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
 # even root. UNIX perms still keep the unprivileged uvicorn process
 # (which has no write permission to the file) from touching it
 # directly; only the wrapper, escalated via sudo to root, can write.
-ReadWritePaths=/boot/firmware /srv/prepperpi/cache
+ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps
 # /srv/prepperpi/cache for the kiwix-catalog.json cache (E2-S3).
+# /srv/prepperpi/maps for the E3-S1 region uninstall path: the admin
+# console deletes <region>.mbtiles directly (no privileged worker —
+# the maps dir is owned by prepperpi-admin so plain unlink suffices).
 #
 # We DO NOT add /srv/prepperpi/zim or user-usb here. Two reasons:
 #   1. aria2c (running as `prepperpi`, which owns those paths) does

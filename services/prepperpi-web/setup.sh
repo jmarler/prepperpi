@@ -87,8 +87,9 @@ install_files() {
   #   _library.html / _library_search.html  <- prepperpi-kiwix
   #   _usb.html                              <- prepperpi-usb
   #   _admin.html                            <- prepperpi-admin
+  #   _maps.html                             <- prepperpi-tiles
   local frag
-  for frag in _library.html _library_search.html _usb.html _admin.html; do
+  for frag in _library.html _library_search.html _usb.html _admin.html _maps.html; do
     if [[ -f "${WEB_SRC}/${frag}" ]] && [[ ! -f "${WEB_DST}/${frag}" ]]; then
       install -m 0644 "${WEB_SRC}/${frag}" "${WEB_DST}/${frag}"
     fi

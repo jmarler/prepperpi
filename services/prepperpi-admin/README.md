@@ -6,6 +6,7 @@ Browser-based admin console for PrepperPi. FastAPI + Jinja2 + uvicorn behind Cad
 - **Online-mode banner** on the home page (E4-S3) — read-only Ethernet-uplink indicator. The Pi is the only thing that goes online; AP clients are firewalled off the upstream by [`prepperpi-ap`](../prepperpi-ap/) so we never become an accidental hotspot.
 - **Storage and health panel** (E4-S2) — live CPU / RAM / SoC temperature / disk-free / connected-client count at 1 Hz. Per-USB write toggle (closes E2-S2 AC-5; session-only — re-plug resets to read-only). Recent event log + downloadable JSON of the last 500 events. Diagnostics tarball download.
 - **Content catalog** (E2-S3) — browse the Kiwix library, filter by language/topic/size/name, queue downloads via [`prepperpi-aria2c`](../prepperpi-aria2c/). Pause / resume / cancel / clear in place. Downloads land in `/srv/prepperpi/zim/` (SD card). The metalink is parsed admin-side and the direct mirror URLs are handed to aria2 — keeps each download to one GID for clean pause/resume semantics.
+- **Offline maps** (E3-S1) — list installed map regions and delete one with a single button. Region metadata (name, bounds, zoom range, total size) is read from `/var/lib/prepperpi/maps/regions.json`, which the reindex service in [`prepperpi-tiles`](../prepperpi-tiles/) maintains. Delete is plain `unlink()` — `/srv/prepperpi/maps/` is owned by the admin user, so no sudo wrapper is needed.
 
 ## Trust model
 
@@ -64,6 +65,8 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | `app/health.py`                          | Pure parsers + I/O wrappers for the Storage page (`/proc`, `/sys`, `dnsmasq.leases`, `os.statvfs`). |
 | `app/catalog.py`                         | OPDS catalog parser + filter helpers (E2-S3). |
 | `app/aria2.py`                           | JSON-RPC client for the [`prepperpi-aria2c`](../prepperpi-aria2c/) daemon. |
+| `app/maps.py`                            | Reads `regions.json` and deletes `.mbtiles` files for the Maps page (E3-S1). |
+| `app/templates/maps.html`                | Server-side render of the Offline maps page. |
 | `app/templates/storage.html`             | Server-side render of the Storage and health page. |
 | `app/templates/catalog.html`             | Server-side render of the Content catalog page. |
 | `app/templates/base.html`                | Layout + nav + theme.                            |
@@ -97,6 +100,9 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | GET     | `/admin/downloads`         | 1 Hz JSON snapshot of aria2's queue (active + waiting + recent). |
 | POST    | `/admin/downloads/queue`   | Add one ZIM to the queue. Body: `book_id`, `destination_id`. |
 | POST    | `/admin/downloads/{gid}/{pause,resume,cancel}` | Mutate one queued/active download. |
+| GET     | `/admin/maps`              | List installed map regions with per-region delete (E3-S1).        |
+| GET     | `/admin/maps/data`         | JSON snapshot of installed regions.                              |
+| POST    | `/admin/maps/{region_id}/delete` | Unlink one `.mbtiles` and redirect 303 with a flash message. |
 | GET     | `/admin/static/admin.css`  | Static stylesheet.                                |
 
 Behind Caddy's `/admin/*` reverse-proxy. Static files for the landing page (`/style.css`, etc.) come from Caddy's file_server; they're under a different prefix and served directly without going through uvicorn.

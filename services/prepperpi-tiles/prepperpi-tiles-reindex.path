@@ -1,0 +1,13 @@
+[Unit]
+Description=PrepperPi — watch /srv/prepperpi/maps for MBTiles add/remove
+Documentation=https://github.com/jmarler/prepperpi
+
+[Path]
+# PathChanged fires on the directory's ctime, which covers create /
+# delete / rename of any .mbtiles inside. Same pattern as
+# prepperpi-kiwix-reindex.
+PathChanged=/srv/prepperpi/maps
+Unit=prepperpi-tiles-reindex.service
+
+[Install]
+WantedBy=multi-user.target

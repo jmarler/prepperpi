@@ -73,11 +73,13 @@ install_files() {
   install -m 0644 "${SRC_DIR}/app/health.py"      "${APP_DST}/health.py"
   install -m 0644 "${SRC_DIR}/app/aria2.py"       "${APP_DST}/aria2.py"
   install -m 0644 "${SRC_DIR}/app/catalog.py"     "${APP_DST}/catalog.py"
+  install -m 0644 "${SRC_DIR}/app/maps.py"        "${APP_DST}/maps.py"
   install -m 0644 "${SRC_DIR}/app/templates/base.html"    "${APP_DST}/templates/base.html"
   install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
   install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"
   install -m 0644 "${SRC_DIR}/app/templates/storage.html" "${APP_DST}/templates/storage.html"
   install -m 0644 "${SRC_DIR}/app/templates/catalog.html" "${APP_DST}/templates/catalog.html"
+  install -m 0644 "${SRC_DIR}/app/templates/maps.html"    "${APP_DST}/templates/maps.html"
   install -m 0644 "${SRC_DIR}/app/static/admin.css"       "${APP_DST}/static/admin.css"
   install -m 0644 "${SRC_DIR}/app/static/admin.js"        "${APP_DST}/static/admin.js"
 
