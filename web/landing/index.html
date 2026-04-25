@@ -13,13 +13,7 @@
 	<p class="tagline">Offline knowledge, served from the box in front of you.</p>
 </header>
 
-<form class="library-search" role="search" action="/library/search" method="get">
-	<label class="library-search__label" for="library-search-input">Search the library</label>
-	<div class="library-search__row">
-		<input id="library-search-input" class="library-search__input" type="search" name="pattern" placeholder="Wikipedia, first aid, solar oven&hellip;" autocomplete="off">
-		<button class="library-search__submit" type="submit">Search</button>
-	</div>
-</form>
+{{include "/_library_search.html"}}
 
 <main class="tiles" aria-label="Content modules">
 	{{include "/_library.html"}}

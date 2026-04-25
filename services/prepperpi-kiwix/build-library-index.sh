@@ -14,6 +14,7 @@ set -euo pipefail
 readonly ZIM_DIR="${ZIM_DIR:-/srv/prepperpi/zim}"
 readonly LIB_XML="${LIB_XML:-/var/lib/prepperpi/library.xml}"
 readonly FRAGMENT="${FRAGMENT:-/opt/prepperpi/web/landing/_library.html}"
+readonly SEARCH_FRAGMENT="${SEARCH_FRAGMENT:-/opt/prepperpi/web/landing/_library_search.html}"
 readonly SERVICE_USER="${SERVICE_USER:-prepperpi}"
 readonly SERVICE_GROUP="${SERVICE_GROUP:-prepperpi}"
 
@@ -35,26 +36,32 @@ human_size() {
 
 # Read per-book metadata from the just-built library.xml. kiwix-manage
 # emits one self-closing <book> element per entry, all attributes on
-# the same logical line. We pull the fields we need (name, title,
+# the same logical line. We pull the fields we need (id, name, title,
 # articleCount) and reconstruct an absolute path from the basename so
 # the caller doesn't have to care whether kiwix-manage stored it
 # relative to library.xml (it does).
 #
-# Emits one TSV line per book: name<TAB>title<TAB>absolute_path<TAB>articleCount
+# The UUID from `id=` is what kiwix-serve's search endpoint accepts as
+# `books.id=<uuid>`. `books.name=<name>` looks like it should work too
+# but empirically returns "No such book" on kiwix-tools 3.7; UUID is
+# the reliable selector.
+#
+# Emits one TSV line per book: id<TAB>name<TAB>title<TAB>absolute_path<TAB>articleCount
 library_entries() {
   [[ -f "$LIB_XML" ]] || return 0
   awk -v zimdir="$ZIM_DIR" '
     /<book / {
-      name=""; title=""; path=""; count="";
+      id=""; name=""; title=""; path=""; count="";
+      if (match($0, /[[:space:]]id="[^"]*"/))           id=substr($0, RSTART+5, RLENGTH-6);
       if (match($0, /[[:space:]]name="[^"]*"/))         name=substr($0, RSTART+7, RLENGTH-8);
       if (match($0, /[[:space:]]title="[^"]*"/))        title=substr($0, RSTART+8, RLENGTH-9);
       if (match($0, /[[:space:]]path="[^"]*"/))         path=substr($0, RSTART+7, RLENGTH-8);
       if (match($0, /[[:space:]]articleCount="[^"]*"/)) count=substr($0, RSTART+15, RLENGTH-16);
-      if (name == "" || path == "") next;
+      if (id == "" || name == "" || path == "") next;
       n = split(path, parts, "/");
       abs = zimdir "/" parts[n];
       if (title == "") title = name;
-      print name "\t" title "\t" abs "\t" count;
+      print id "\t" name "\t" title "\t" abs "\t" count;
     }
   ' "$LIB_XML"
 }
@@ -103,13 +110,14 @@ rebuild_library_xml() {
 
 rebuild_fragment() {
   install -d -m 0755 "$(dirname "$FRAGMENT")"
-  local tmp
-  tmp=$(mktemp)
+  local tiles_tmp search_tmp
+  tiles_tmp=$(mktemp)
+  search_tmp=$(mktemp)
   # shellcheck disable=SC2064
-  trap "rm -f '$tmp'" RETURN
+  trap "rm -f '$tiles_tmp' '$search_tmp'" RETURN
 
-  local count=0
-  while IFS=$'\t' read -r name title abs_path articles; do
+  local count=0 ids=()
+  while IFS=$'\t' read -r id name title abs_path articles; do
     [[ -z "$name" ]] && continue
     local size_bytes size_h articles_txt
     size_bytes=$(stat -c%s "$abs_path" 2>/dev/null || echo 0)
@@ -120,6 +128,7 @@ rebuild_fragment() {
       articles_txt="ZIM library"
     fi
     count=$((count + 1))
+    ids+=("$id")
     {
       printf '<article class="tile tile--library" aria-labelledby="tile-zim-%s-title">\n' "$(html_escape "$name")"
       printf '  <div class="tile__icon" aria-hidden="true">📖</div>\n'
@@ -129,7 +138,7 @@ rebuild_fragment() {
       printf '  <p class="tile__desc">%s</p>\n' "$articles_txt"
       printf '  <p class="tile__status">%s on disk</p>\n' "$(html_escape "$size_h")"
       printf '</article>\n'
-    } >>"$tmp"
+    } >>"$tiles_tmp"
   done < <(library_entries)
 
   if (( count == 0 )); then
@@ -140,10 +149,33 @@ rebuild_fragment() {
       printf '  <p class="tile__desc">No ZIM files installed yet.</p>\n'
       printf '  <p class="tile__status">Drop a <code>.zim</code> file into <code>/srv/prepperpi/zim/</code>.</p>\n'
       printf '</article>\n'
-    } >>"$tmp"
+    } >>"$tiles_tmp"
+    # Empty library -> empty search fragment -> landing page renders
+    # no form at all (it would only return "No book matches" on submit).
+    : >"$search_tmp"
+  else
+    # kiwix-serve's /search requires at least one books.id / books.name
+    # / books.filter.* to scope the query; a bare pattern returns a 400
+    # "No book matches selection criteria". Enumerate every UUID here
+    # so "search across all loaded books" is the effective default
+    # with no client-side JS.
+    {
+      printf '<form class="library-search" role="search" action="/library/search" method="get">\n'
+      printf '  <label class="library-search__label" for="library-search-input">Search the library</label>\n'
+      printf '  <div class="library-search__row">\n'
+      printf '    <input id="library-search-input" class="library-search__input" type="search" name="pattern" placeholder="Wikipedia, first aid, solar oven&hellip;" autocomplete="off" required>\n'
+      printf '    <button class="library-search__submit" type="submit">Search</button>\n'
+      printf '  </div>\n'
+      local book_id
+      for book_id in "${ids[@]}"; do
+        printf '  <input type="hidden" name="books.id" value="%s">\n' "$(html_escape "$book_id")"
+      done
+      printf '</form>\n'
+    } >"$search_tmp"
   fi
 
-  install -m 0644 "$tmp" "$FRAGMENT"
+  install -m 0644 "$tiles_tmp" "$FRAGMENT"
+  install -m 0644 "$search_tmp" "$SEARCH_FRAGMENT"
   log "fragment rebuilt; ${count} tile(s) rendered"
 }
 
