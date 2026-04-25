@@ -1,0 +1,13 @@
+[Unit]
+Description=PrepperPi — watch /srv/prepperpi/user-usb for USB add/remove
+Documentation=https://github.com/jmarler/prepperpi
+
+[Path]
+# PathChanged fires when ctime on the directory changes, which is what
+# happens when prepperpi-usb-mount.sh creates (and prepperpi-usb-
+# unmount.sh removes) the per-volume mountpoint subdirectory.
+PathChanged=/srv/prepperpi/user-usb
+Unit=prepperpi-usb-reindex.service
+
+[Install]
+WantedBy=multi-user.target

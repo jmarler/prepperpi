@@ -1,0 +1,10 @@
+[Unit]
+Description=PrepperPi — rebuild USB tile fragment for the landing page
+Documentation=https://github.com/jmarler/prepperpi
+
+[Service]
+Type=oneshot
+# Runs as root so it can write the fragment file under
+# /opt/prepperpi/web/landing (root-owned). Only reads from
+# /srv/prepperpi/user-usb and the kernel mount table.
+ExecStart=/opt/prepperpi/services/prepperpi-usb/build-usb-index.sh

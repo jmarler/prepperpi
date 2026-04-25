@@ -94,6 +94,28 @@
 			redir http://prepperpi.home.arpa/ 307
 		}
 
+		# ---- 2a. USB markdown renderer ----
+		# Match `*.md` paths under /usb FIRST so they go to the
+		# Python renderer instead of file_server (which would serve
+		# the .md as text/plain). path_regexp lets us match the
+		# extension precisely.
+		@usb_md path_regexp ^/usb/.+\.md$
+		handle @usb_md {
+			reverse_proxy 127.0.0.1:8089
+		}
+
+		# ---- 2a (cont). USB file browser ----
+		# /usb -> redirect to /usb/ so file_server's browse view
+		# resolves cleanly. /usb/* -> serve from /srv/prepperpi/user-usb.
+		@usb_root path /usb
+		handle @usb_root {
+			redir /usb/ permanent
+		}
+		handle_path /usb/* {
+			root * /srv/prepperpi/user-usb
+			file_server browse
+		}
+
 		# ---- 2b. Library (kiwix-serve reverse proxy) ----
 		# /library and everything below it are handled by kiwix-serve
 		# on 127.0.0.1:8088. kiwix-serve was launched with

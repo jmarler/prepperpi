@@ -1,0 +1,18 @@
+[Unit]
+Description=PrepperPi — mount USB partition %I
+Documentation=https://github.com/jmarler/prepperpi
+# BindsTo ties our lifecycle to the kernel device unit that
+# systemd-udevd creates when the USB partition appears. When the
+# device disappears (unplug), systemd stops this unit, which runs
+# ExecStop= -> prepperpi-usb-unmount.sh.
+BindsTo=dev-%i.device
+After=dev-%i.device
+RequiresMountsFor=/srv/prepperpi/user-usb
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/opt/prepperpi/services/prepperpi-usb/prepperpi-usb-mount.sh %i
+ExecStop=/opt/prepperpi/services/prepperpi-usb/prepperpi-usb-unmount.sh %i
+TimeoutStartSec=15s
+TimeoutStopSec=10s

@@ -1,0 +1,12 @@
+# /etc/udev/rules.d/99-prepperpi-usb.rules
+# PrepperPi — auto-mount USB partitions read-only as they appear.
+#
+# We match block devices that (a) carry a filesystem (ID_FS_USAGE),
+# (b) sit on the USB bus (ID_BUS), and (c) are partitions or whole
+# disks with a filesystem on them (PARTN/DEVTYPE). systemd-udevd
+# pulls in `prepperpi-usb-mount@<kernel>.service` via SYSTEMD_WANTS;
+# that template unit BindsTo the synthesized .device unit, so when
+# the device is yanked, ExecStop= runs the unmount script
+# automatically -- no separate ACTION=="remove" rule needed.
+
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_USAGE}=="filesystem", TAG+="systemd", ENV{SYSTEMD_WANTS}+="prepperpi-usb-mount@$kernel.service"
