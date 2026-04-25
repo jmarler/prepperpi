@@ -94,6 +94,23 @@
 			redir http://prepperpi.home.arpa/ 307
 		}
 
+		# ---- 2 (admin). Admin console ----
+		# /admin and /admin/* reverse-proxy to the FastAPI app on
+		# 127.0.0.1:8090. AC-5 (E4-S1) requires the admin console be
+		# reachable only from the AP subnet or from the device itself.
+		# We enforce it here at the Caddy layer so the unprivileged
+		# uvicorn never even sees off-subnet requests.
+		@admin path /admin /admin/*
+		handle @admin {
+			@admin_allowed remote_ip 10.42.0.0/24 127.0.0.1/32 ::1/128
+			handle @admin_allowed {
+				reverse_proxy 127.0.0.1:8090
+			}
+			respond "Forbidden — admin console is reachable only from the PrepperPi Wi-Fi network." 403 {
+				close
+			}
+		}
+
 		# ---- 2a. USB markdown renderer ----
 		# Match `*.md` paths under /usb FIRST so they go to the
 		# Python renderer instead of file_server (which would serve

@@ -33,6 +33,7 @@ readonly SERVICE_ORDER=(
   prepperpi-ap
   prepperpi-events
   prepperpi-web
+  prepperpi-admin
   prepperpi-kiwix
   prepperpi-usb
 )

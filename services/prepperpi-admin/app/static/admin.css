@@ -1,0 +1,274 @@
+/* prepperpi-admin — admin-console styles. Pulls in the landing
+ * page's CSS variables via /style.css; this stylesheet adds the
+ * admin-specific layout, navigation, forms, and flash banners. */
+
+.admin-body {
+	background: var(--bg);
+	color: var(--ink);
+	min-height: 100vh;
+}
+
+.admin-header {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.admin-header h1 {
+	color: var(--accent);
+	margin: 0;
+	font-size: 1.5rem;
+}
+
+.admin-header__home {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.admin-header__home:hover { text-decoration: underline; }
+
+.admin-header__subtitle {
+	color: var(--ink);
+	font-weight: normal;
+	font-size: 1rem;
+}
+
+.admin-layout {
+	max-width: 60rem;
+	margin: 1rem auto;
+	padding: 0 1rem;
+}
+
+.admin-nav {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	border-bottom: 1px solid var(--border);
+	padding-bottom: 0.5rem;
+	margin-bottom: 1rem;
+}
+
+.admin-nav a, .admin-nav__soon {
+	padding: 0.4rem 0.75rem;
+	border-radius: var(--radius);
+	font-size: 0.95rem;
+	color: var(--ink);
+	text-decoration: none;
+}
+
+.admin-nav a:hover {
+	background: var(--panel);
+}
+
+.admin-nav__active {
+	background: var(--accent);
+	color: #1a1000;
+	font-weight: 600;
+}
+
+.admin-nav__active:hover {
+	background: var(--accent);
+}
+
+.admin-nav__soon {
+	color: var(--ink-dim);
+	cursor: not-allowed;
+	font-style: italic;
+}
+
+.admin-page__title {
+	margin-top: 0;
+	color: var(--accent);
+}
+
+.admin-lede {
+	color: var(--ink-dim);
+	margin-top: -0.5rem;
+}
+
+.admin-card-list {
+	list-style: none;
+	padding: 0;
+	margin: 1rem 0;
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 0.75rem;
+}
+
+@media (min-width: 32rem) {
+	.admin-card-list { grid-template-columns: 1fr 1fr; }
+}
+
+.admin-card {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 1rem;
+}
+
+.admin-card--soon {
+	background: var(--panel-dim);
+	color: var(--ink-dim);
+}
+
+.admin-card__title {
+	margin: 0 0 0.4rem;
+	font-size: 1.05rem;
+}
+
+.admin-card--soon .admin-card__title {
+	color: var(--ink-dim);
+}
+
+.admin-card__title a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.admin-card__title a:hover { text-decoration: underline; }
+
+.admin-card__soon {
+	font-size: 0.8rem;
+	font-weight: normal;
+	font-style: italic;
+	color: var(--ink-dim);
+}
+
+.admin-card__desc {
+	margin: 0;
+	font-size: 0.9rem;
+	line-height: 1.4;
+}
+
+.admin-footnote {
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+	font-style: italic;
+	margin-top: 1.5rem;
+}
+
+/* Flash banners */
+.flash {
+	margin: 1rem 0;
+	padding: 0.75rem 1rem;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+}
+
+.flash--success {
+	background: rgba(245, 166, 35, 0.1);
+	border-color: var(--accent);
+}
+
+.flash--error {
+	background: rgba(220, 50, 50, 0.1);
+	border-color: #c33;
+}
+
+.flash ul {
+	margin: 0.4rem 0 0;
+	padding-left: 1.25rem;
+}
+
+/* Warning banner — shown above destructive forms. */
+.warning-banner {
+	background: var(--panel-dim);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	padding: 0.75rem 1rem;
+	margin-bottom: 1rem;
+	font-size: 0.9rem;
+}
+
+/* Form */
+.admin-form {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	margin-top: 1rem;
+}
+
+.admin-form__field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+}
+
+.admin-form__label {
+	font-size: 0.95rem;
+	font-weight: 600;
+}
+
+.admin-form__hint {
+	color: var(--ink-dim);
+	font-size: 0.8rem;
+}
+
+.admin-form__input {
+	padding: 0.55rem 0.75rem;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	color: var(--ink);
+	font: inherit;
+}
+
+.admin-form__input:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.admin-form__actions {
+	display: flex;
+	gap: 0.75rem;
+	margin-top: 0.5rem;
+}
+
+.btn {
+	padding: 0.6rem 1.25rem;
+	border: none;
+	border-radius: var(--radius);
+	font: inherit;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.btn--primary {
+	background: var(--accent);
+	color: #1a1000;
+}
+
+.btn--primary:hover {
+	filter: brightness(1.1);
+}
+
+.btn--danger {
+	background: #802020;
+	color: var(--ink);
+	border: 1px solid #c33;
+}
+
+.btn--danger:hover {
+	background: #a02525;
+}
+
+/* Reset / danger zone */
+.admin-danger-zone {
+	margin-top: 2.5rem;
+	padding-top: 1rem;
+	border-top: 1px dashed var(--border);
+}
+
+.admin-danger-zone__title {
+	color: #c33;
+	font-size: 1rem;
+}
+
+.admin-danger-zone__desc {
+	font-size: 0.9rem;
+	color: var(--ink-dim);
+}
+
+.admin-form-reset {
+	margin-top: 0.5rem;
+}

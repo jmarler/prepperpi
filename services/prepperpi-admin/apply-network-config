@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""apply-network-config — privileged worker, invoked via sudo by the
+prepperpi-admin FastAPI app.
+
+Reads a JSON spec from stdin, validates strictly, writes
+/boot/firmware/prepperpi.conf, and bounces the AP stack
+(prepperpi-ap-configure -> hostapd -> dnsmasq) so the new settings
+take effect.
+
+This script is the trust boundary between the (unprivileged)
+prepperpi-admin user and the privileged kernel/systemd surface.
+Validation here MUST be independent of whatever the FastAPI app
+does -- treat the FastAPI process as untrusted. The sudoers rule
+that lets prepperpi-admin call this without a password covers the
+whole script regardless of args; we read everything from stdin and
+ignore argv.
+
+Two action modes:
+  {"action": "set", "ssid": "...", "wifi_password": "...",
+                    "channel": "auto"|1..13, "country": "US"}
+  {"action": "reset"}
+"""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+CONF_FILE = Path("/boot/firmware/prepperpi.conf")
+
+# Two-letter ISO 3166-1 codes hostapd's regulatory database accepts.
+# Hard-coding rather than punting to the user keeps the validation
+# strict and lets us bound the surface attack a malformed code
+# would have on hostapd's startup.
+ALLOWED_COUNTRIES = {
+    "AT", "AU", "BE", "BR", "CA", "CH", "CL", "CN", "CO", "CZ",
+    "DE", "DK", "ES", "FI", "FR", "GB", "GR", "HK", "HU", "IE",
+    "IL", "IN", "IS", "IT", "JP", "KR", "MX", "MY", "NL", "NO",
+    "NZ", "PH", "PL", "PT", "RO", "RU", "SE", "SG", "SK", "TH",
+    "TR", "TW", "UA", "US", "VN", "ZA",
+}
+
+# SSID is "any printable UTF-8" per IEEE; we restrict to a sensible
+# subset so we don't hand hostapd something exotic and accidentally
+# brick the AP. 32 BYTES is the IEEE 802.11 limit.
+SSID_RE = re.compile(r"^[A-Za-z0-9 \-_.()\[\]]{1,32}$")
+SSID_MAX_BYTES = 32
+
+# WPA2 passphrase: 8-63 printable ASCII per WPA spec, OR empty
+# (which means "open Wi-Fi", no encryption).
+WIFI_PASSWORD_RE = re.compile(r"^[\x20-\x7e]{0,63}$")
+
+
+def _err(msg: str) -> str:
+    return msg
+
+
+def validate_set(spec: dict) -> list[str]:
+    errors: list[str] = []
+
+    ssid = spec.get("ssid")
+    if not isinstance(ssid, str):
+        errors.append(_err("ssid: must be a string"))
+    elif len(ssid.encode("utf-8")) > SSID_MAX_BYTES:
+        errors.append(_err(f"ssid: must be {SSID_MAX_BYTES} bytes or fewer"))
+    elif not SSID_RE.match(ssid):
+        errors.append(_err(
+            "ssid: only letters, digits, space, and -_.()[] allowed (1-32 chars)"
+        ))
+
+    wifi_password = spec.get("wifi_password", "")
+    if not isinstance(wifi_password, str):
+        errors.append(_err("wifi_password: must be a string"))
+    elif wifi_password and not (8 <= len(wifi_password) <= 63):
+        errors.append(_err(
+            "wifi_password: must be empty (open) or 8-63 characters (WPA2)"
+        ))
+    elif not WIFI_PASSWORD_RE.match(wifi_password):
+        errors.append(_err("wifi_password: contains non-printable characters"))
+
+    channel = spec.get("channel", "auto")
+    if channel != "auto":
+        try:
+            ch = int(channel)
+        except (ValueError, TypeError):
+            errors.append(_err("channel: must be 'auto' or 1-13"))
+        else:
+            if not (1 <= ch <= 13):
+                errors.append(_err("channel: must be 'auto' or 1-13"))
+
+    country = spec.get("country", "US")
+    if country not in ALLOWED_COUNTRIES:
+        errors.append(_err(
+            f"country: must be one of {', '.join(sorted(ALLOWED_COUNTRIES))}"
+        ))
+
+    return errors
+
+
+def write_config(spec: dict) -> None:
+    # Pi-gen sets the conf file path under /boot/firmware on Trixie.
+    # Render the four keys we manage; preserve the comment header so
+    # the file is still recognizable when somebody mounts the SD card
+    # and reads it.
+    body = (
+        "# PrepperPi boot-partition overrides.\n"
+        "# Written by the admin console; lines edited here will be\n"
+        "# overwritten on the next save. To restore the factory state,\n"
+        "# use the 'Reset to factory defaults' button or delete this file.\n"
+        "\n"
+        f"SSID={spec['ssid']}\n"
+        f"WIFI_PASSWORD={spec.get('wifi_password', '')}\n"
+        f"CHANNEL={spec.get('channel', 'auto')}\n"
+        f"COUNTRY={spec.get('country', 'US')}\n"
+    )
+    # Atomic: write to temp, rename onto the real path.
+    tmp = CONF_FILE.with_suffix(".conf.tmp")
+    tmp.write_text(body)
+    tmp.chmod(0o644)
+    tmp.replace(CONF_FILE)
+
+
+def reset_config() -> None:
+    # "Reset to defaults" = remove the override file entirely so
+    # prepperpi-ap-configure falls back to its hard-coded defaults
+    # (auto-generated SSID from the MAC, open Wi-Fi, US, auto channel).
+    if CONF_FILE.exists():
+        CONF_FILE.unlink()
+
+
+def restart_ap() -> None:
+    # Re-run the configure oneshot first so /etc/hostapd and
+    # /etc/dnsmasq.d are re-rendered from the new prepperpi.conf,
+    # then bounce the daemons so they pick up the new config.
+    for unit in ("prepperpi-ap-configure.service",
+                 "hostapd.service",
+                 "dnsmasq.service"):
+        subprocess.run(
+            ["systemctl", "restart", unit],
+            check=True,
+            timeout=20,
+        )
+
+
+def main() -> int:
+    try:
+        raw = sys.stdin.read()
+        spec = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"invalid JSON on stdin: {exc}\n")
+        return 2
+    if not isinstance(spec, dict):
+        sys.stderr.write("payload must be a JSON object\n")
+        return 2
+
+    action = spec.get("action")
+    if action == "set":
+        errors = validate_set(spec)
+        if errors:
+            for e in errors:
+                sys.stderr.write(f"error: {e}\n")
+            return 2
+        try:
+            write_config(spec)
+            restart_ap()
+        except subprocess.CalledProcessError as exc:
+            sys.stderr.write(f"systemctl failed: {exc}\n")
+            return 1
+        except OSError as exc:
+            sys.stderr.write(f"write failed: {exc}\n")
+            return 1
+        sys.stdout.write("ok\n")
+        return 0
+    elif action == "reset":
+        try:
+            reset_config()
+            restart_ap()
+        except subprocess.CalledProcessError as exc:
+            sys.stderr.write(f"systemctl failed: {exc}\n")
+            return 1
+        except OSError as exc:
+            sys.stderr.write(f"unlink failed: {exc}\n")
+            return 1
+        sys.stdout.write("ok\n")
+        return 0
+    else:
+        sys.stderr.write(f"unknown action: {action!r}\n")
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

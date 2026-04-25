@@ -1,0 +1,14 @@
+# /etc/sudoers.d/prepperpi-admin
+# PrepperPi — let the unprivileged prepperpi-admin user run exactly
+# one privileged action: the apply-network-config worker, which
+# validates its JSON-stdin payload, writes /boot/firmware/prepperpi.conf,
+# and bounces the AP stack.
+#
+# - NOPASSWD because the FastAPI app cannot prompt; it invokes via
+#   `sudo -n`.
+# - Exact path match. The script is owned root:root mode 0755 so
+#   prepperpi-admin cannot tamper with it.
+# - No `setenv` / no `*` glob; sudoers' default behavior bars the
+#   user from passing -E or substituting binaries.
+
+prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/apply-network-config

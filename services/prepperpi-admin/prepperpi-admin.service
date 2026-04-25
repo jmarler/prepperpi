@@ -1,0 +1,44 @@
+[Unit]
+Description=PrepperPi — admin console (FastAPI/uvicorn)
+Documentation=https://github.com/jmarler/prepperpi
+After=network.target
+
+[Service]
+Type=simple
+User=prepperpi-admin
+Group=prepperpi-admin
+WorkingDirectory=/opt/prepperpi/services/prepperpi-admin/app
+ExecStart=/usr/bin/python3 -m uvicorn main:app \
+  --host 127.0.0.1 \
+  --port 8090 \
+  --no-access-log \
+  --log-level info
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. The daemon never writes to disk except indirectly via
+# the apply-network-config sudo wrapper; everything else is read-only.
+NoNewPrivileges=false
+# ^ false because we DO need to invoke sudo. The privilege bump is
+# bounded by the sudoers rule (one specific script, NOPASSWD only).
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
+# /boot/firmware has to be writable IN THE NAMESPACE so the sudo'd
+# wrapper can rewrite prepperpi.conf -- a read-only bind mount blocks
+# even root. UNIX perms still keep the unprivileged uvicorn process
+# (which has no write permission to the file) from touching it
+# directly; only the wrapper, escalated via sudo to root, can write.
+ReadWritePaths=/boot/firmware
+LockPersonality=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
