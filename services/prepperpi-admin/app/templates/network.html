@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Network · Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Network settings</h2>
+
+{% if saved %}
+<div class="flash flash--success" role="status">
+	<strong>Saved.</strong> The Wi-Fi access point is reconfiguring. If your phone or laptop is connected to the PrepperPi network, you'll need to reconnect — open your Wi-Fi settings and look for the new name.
+</div>
+{% endif %}
+
+{% if reset_done %}
+<div class="flash flash--success" role="status">
+	<strong>Reset.</strong> Factory defaults restored. The SSID is back to <code>PrepperPi-XXXX</code> with no password (open Wi-Fi). Reconnect from your Wi-Fi settings.
+</div>
+{% endif %}
+
+{% if errors %}
+<div class="flash flash--error" role="alert">
+	<strong>Couldn't save:</strong>
+	<ul>
+		{% for err in errors %}<li>{{ err }}</li>{% endfor %}
+	</ul>
+</div>
+{% endif %}
+
+<div class="warning-banner" role="note">
+	<strong>Heads up:</strong> Saving these settings will briefly disconnect every device that's currently on the PrepperPi Wi-Fi (about 10 seconds). You may need to reconnect afterwards.
+</div>
+
+<form method="post" action="/admin/network" class="admin-form"
+      onsubmit="return confirm('Saving will disconnect every device currently on the PrepperPi Wi-Fi (including this one). Continue?');">
+
+	<label class="admin-form__field">
+		<span class="admin-form__label">Wi-Fi network name (SSID)</span>
+		<input class="admin-form__input" name="ssid" type="text"
+		       maxlength="32" required value="{{ config.ssid }}"
+		       autocomplete="off">
+		<small class="admin-form__hint">1-32 characters. Letters, digits, space, and <code>-_.()[]</code> only.</small>
+	</label>
+
+	<label class="admin-form__field">
+		<span class="admin-form__label">Wi-Fi password</span>
+		<input class="admin-form__input" name="wifi_password" type="text"
+		       minlength="0" maxlength="63" value="{{ config.wifi_password }}"
+		       autocomplete="off">
+		<small class="admin-form__hint">Leave empty for an open Wi-Fi network. Otherwise 8-63 characters (WPA2).</small>
+	</label>
+
+	<label class="admin-form__field">
+		<span class="admin-form__label">Channel</span>
+		<select class="admin-form__input" name="channel">
+			<option value="auto" {% if config.channel == "auto" %}selected{% endif %}>Auto (recommended)</option>
+			{% for n in channels %}
+			<option value="{{ n }}" {% if config.channel == n %}selected{% endif %}>{{ n }}</option>
+			{% endfor %}
+		</select>
+		<small class="admin-form__hint">"Auto" lets the Pi pick the least-busy channel from {1, 6, 11} at boot.</small>
+	</label>
+
+	<label class="admin-form__field">
+		<span class="admin-form__label">Country</span>
+		<select class="admin-form__input" name="country">
+			{% for code in countries %}
+			<option value="{{ code }}" {% if config.country == code %}selected{% endif %}>{{ code }}</option>
+			{% endfor %}
+		</select>
+		<small class="admin-form__hint">Regulatory domain; required by hostapd. Two-letter ISO code.</small>
+	</label>
+
+	<div class="admin-form__actions">
+		<button type="submit" class="btn btn--primary">Save and apply</button>
+	</div>
+</form>
+
+<section class="admin-danger-zone">
+	<h3 class="admin-danger-zone__title">Reset to factory defaults</h3>
+	<p class="admin-danger-zone__desc">Removes every setting on this page and restores the shipping defaults: SSID <code>PrepperPi-XXXX</code> (auto-generated from your Pi's MAC address), no password (open Wi-Fi), auto channel, country US.</p>
+	<form method="post" action="/admin/network/reset" class="admin-form-reset"
+	      onsubmit="return confirm('Reset to factory defaults? Your Wi-Fi name and password will be cleared and connected devices will be disconnected. Continue?');">
+		<button type="submit" class="btn btn--danger">Reset</button>
+	</form>
+</section>
+{% endblock %}

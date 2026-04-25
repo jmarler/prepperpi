@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Admin overview</h2>
+<p class="admin-lede">Manage the parts of your PrepperPi that don't belong on the public landing page.</p>
+
+<ul class="admin-card-list">
+	<li class="admin-card">
+		<h3 class="admin-card__title"><a href="/admin/network">Network</a></h3>
+		<p class="admin-card__desc">Change the Wi-Fi name (SSID), set or remove a password, pick a channel, and set your regulatory country code.</p>
+	</li>
+	<li class="admin-card admin-card--soon">
+		<h3 class="admin-card__title">Storage <span class="admin-card__soon">(soon)</span></h3>
+		<p class="admin-card__desc">Per-USB-mount write toggle, disk usage, content folders. Lands with E4-S2.</p>
+	</li>
+	<li class="admin-card admin-card--soon">
+		<h3 class="admin-card__title">Content <span class="admin-card__soon">(soon)</span></h3>
+		<p class="admin-card__desc">Browse the Kiwix catalog, queue downloads, manage installed ZIMs. Lands with E2-S3.</p>
+	</li>
+	<li class="admin-card admin-card--soon">
+		<h3 class="admin-card__title">Online mode <span class="admin-card__soon">(soon)</span></h3>
+		<p class="admin-card__desc">Connect a temporary uplink for content downloads or system updates, then return to fully offline. Lands with E4-S3.</p>
+	</li>
+</ul>
+
+<p class="admin-footnote">The admin console is reachable only from clients on the PrepperPi Wi-Fi network or from the device itself. It is never exposed to an upstream uplink.</p>
+{% endblock %}

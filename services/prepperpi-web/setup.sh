@@ -80,6 +80,20 @@ install_files() {
   install -m 0644 "${WEB_SRC}/style.css"     "${WEB_DST}/style.css"
   install -m 0644 "${WEB_SRC}/dashboard.js"  "${WEB_DST}/dashboard.js"
 
+  # Seed placeholder fragments so {{include}} calls in index.html
+  # always resolve, even before (or without) the owning services
+  # installing real content. Each owning service's setup.sh
+  # overwrites its own fragment when it runs:
+  #   _library.html / _library_search.html  <- prepperpi-kiwix
+  #   _usb.html                              <- prepperpi-usb
+  #   _admin.html                            <- prepperpi-admin
+  local frag
+  for frag in _library.html _library_search.html _usb.html _admin.html; do
+    if [[ -f "${WEB_SRC}/${frag}" ]] && [[ ! -f "${WEB_DST}/${frag}" ]]; then
+      install -m 0644 "${WEB_SRC}/${frag}" "${WEB_DST}/${frag}"
+    fi
+  done
+
   log "installing systemd unit"
   install -m 0644 "${SRC_DIR}/prepperpi-web.service" /etc/systemd/system/prepperpi-web.service
 }

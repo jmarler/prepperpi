@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="PrepperPi admin console.">
+<title>{% block title %}PrepperPi Admin{% endblock %}</title>
+<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/admin/static/admin.css">
+</head>
+<body class="admin-body">
+<header class="site-header admin-header">
+	<h1><a href="/" class="admin-header__home">PrepperPi</a> <span class="admin-header__subtitle">Admin</span></h1>
+</header>
+
+<div class="admin-layout">
+	<nav class="admin-nav" aria-label="Admin sections">
+		<a href="/admin/" {% if active == "home" %}aria-current="page" class="admin-nav__active"{% endif %}>Overview</a>
+		<a href="/admin/network" {% if active == "network" %}aria-current="page" class="admin-nav__active"{% endif %}>Network</a>
+		<span class="admin-nav__soon">Storage <small>(soon)</small></span>
+		<span class="admin-nav__soon">Content <small>(soon)</small></span>
+		<span class="admin-nav__soon">Online mode <small>(soon)</small></span>
+	</nav>
+
+	<main class="admin-main">
+		{% block content %}{% endblock %}
+	</main>
+</div>
+</body>
+</html>
