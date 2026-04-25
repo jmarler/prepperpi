@@ -81,12 +81,36 @@ def is_mountpoint(path: str) -> bool:
 
 def remount(path: Path, writable: bool) -> None:
     """Remount in place, preserving the safety flags
-    prepperpi-usb-mount.sh originally applied (nodev/nosuid/noexec)."""
+    prepperpi-usb-mount.sh originally applied (nodev/nosuid/noexec).
+
+    Two remount calls, one for each mount namespace that needs to
+    see the change:
+
+    1. `nsenter --target 1 --mount` enters PID 1's (host) namespace
+       so the call mutates the underlying device's mount state.
+       That's what aria2c (also running in the host namespace) needs
+       in order to actually write into the USB drive.
+
+    2. A second remount inside our (admin daemon's) own private
+       mount namespace. systemd sets up admin's namespace as `slave`
+       to the host, which propagates new mounts INTO the namespace
+       but NOT remount option changes. Without this second call,
+       admin's `/proc/mounts` keeps showing the old options and
+       `health.usb_drives()` reports the wrong writable state.
+    """
     rw_flag = "rw" if writable else "ro"
     options = f"remount,{rw_flag},nodev,nosuid,noexec"
     subprocess.run(
-        ["mount", "-o", options, str(path)],
+        ["nsenter", "--target", "1", "--mount", "--",
+         "mount", "-o", options, str(path)],
         check=True,
+        timeout=10,
+    )
+    # Best-effort — the host remount above is the load-bearing one;
+    # the namespace re-sync is for the admin daemon's UI consistency.
+    subprocess.run(
+        ["mount", "-o", options, str(path)],
+        check=False,
         timeout=10,
     )
 

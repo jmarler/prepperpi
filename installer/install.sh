@@ -34,6 +34,7 @@ readonly SERVICE_ORDER=(
   prepperpi-events
   prepperpi-web
   prepperpi-admin
+  prepperpi-aria2c
   prepperpi-kiwix
   prepperpi-usb
 )

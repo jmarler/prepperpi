@@ -198,7 +198,12 @@ def disks() -> list[dict]:
     free, percent, low_space}."""
     results: list[dict] = []
     seen = set()
-    text = _read(Path("/proc/mounts"))
+    # /proc/1/mounts is PID 1's (the host's) view of mounts. /proc/mounts
+    # is the calling process's view, which inside our private mount
+    # namespace doesn't reflect rw remounts done in the host (slave
+    # propagation only carries new mounts, not option changes). Reading
+    # PID 1's table sidesteps that and shows actual host writability.
+    text = _read(Path("/proc/1/mounts"))
     if text is None:
         return results
     for line in text.splitlines():
@@ -245,7 +250,12 @@ def usb_drives() -> list[dict]:
     results: list[dict] = []
     if not USB_BASE.is_dir():
         return results
-    text = _read(Path("/proc/mounts"))
+    # /proc/1/mounts is PID 1's (the host's) view of mounts. /proc/mounts
+    # is the calling process's view, which inside our private mount
+    # namespace doesn't reflect rw remounts done in the host (slave
+    # propagation only carries new mounts, not option changes). Reading
+    # PID 1's table sidesteps that and shows actual host writability.
+    text = _read(Path("/proc/1/mounts"))
     rw_state: dict[str, bool] = {}
     if text is not None:
         for line in text.splitlines():

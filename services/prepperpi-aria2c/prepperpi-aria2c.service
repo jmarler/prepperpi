@@ -1,0 +1,45 @@
+[Unit]
+Description=PrepperPi — aria2c download daemon for E2-S3 ZIM catalog
+Documentation=https://github.com/jmarler/prepperpi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prepperpi
+Group=prepperpi
+RuntimeDirectory=prepperpi-aria2c
+StateDirectory=prepperpi/aria2
+WorkingDirectory=/var/lib/prepperpi/aria2
+EnvironmentFile=/etc/prepperpi/aria2/secret.env
+ExecStart=/usr/bin/aria2c --conf-path=/etc/prepperpi/aria2/aria2.conf --rpc-secret=${ARIA2_RPC_SECRET}
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing. We deliberately keep this *lighter* than the admin
+# daemon's. Two reasons:
+#
+#   1. aria2c needs to see live remount changes on USB drives.
+#      ProtectSystem=strict creates a private mount namespace that
+#      doesn't receive remount option propagation from the host
+#      (slave propagation only carries new mounts, not option
+#      changes). With it enabled, a USB toggled rw via the admin
+#      page would still appear ro to aria2c and writes would EACCES.
+#
+#   2. The threat model is bounded by the prepperpi user — aria2c
+#      already has write access to its data directories and nothing
+#      else interesting is owned by prepperpi. ProtectHome and the
+#      kernel-tunable protections still apply, just not the
+#      mount-namespace ones.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

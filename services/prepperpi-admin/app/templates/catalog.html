@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Content catalog · Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Content catalog</h2>
+<p class="admin-lede">Browse the Kiwix library and download ZIMs over an Ethernet uplink. Selected items download in the background; pause/resume/cancel anytime.</p>
+
+{% if refreshed %}
+<div class="flash flash--success" role="status">
+	<strong>Catalog refreshed.</strong> {{ book_count }} books available.
+</div>
+{% endif %}
+{% if refresh_error %}
+<div class="flash flash--error" role="alert">
+	<strong>Couldn't refresh:</strong> {{ refresh_error }}
+</div>
+{% endif %}
+
+<section class="catalog-meta">
+	<div>
+		{% if fetched_at %}
+		Last refreshed <time datetime="{{ fetched_at }}">{{ fetched_at }}</time> · <strong>{{ book_count }}</strong> books indexed.
+		{% else %}
+		Catalog has not been refreshed yet. Plug in Ethernet and click <em>Refresh catalog</em> to fetch.
+		{% endif %}
+	</div>
+	<form method="post" action="/admin/catalog/refresh" class="catalog-refresh-form">
+		<button type="submit" class="btn btn--primary">Refresh catalog</button>
+	</form>
+</section>
+
+<section class="catalog-section" aria-labelledby="catalog-dest-title">
+	<h3 id="catalog-dest-title" class="storage-section__title">Destination</h3>
+	<p class="storage-section__hint">Downloads land in internal storage.</p>
+	{# Hidden picker so the JS keeps working without changes; only one option for now. #}
+	<select id="catalog-destination" class="admin-form__input" data-destination-picker hidden aria-hidden="true">
+		{% for d in destinations %}
+		<option value="{{ d.id }}" data-free-bytes="{{ d.free_bytes }}">{{ d.label }}</option>
+		{% endfor %}
+	</select>
+	{% for d in destinations %}
+	<p class="catalog-dest-summary">{{ d.label }} — <strong>{{ format_bytes(d.free_bytes) }}</strong> free</p>
+	{% endfor %}
+</section>
+
+<section class="catalog-section" aria-labelledby="catalog-filters-title">
+	<h3 id="catalog-filters-title" class="storage-section__title">Filters</h3>
+	<div class="catalog-filters">
+		<label class="catalog-filter">
+			<span>Search</span>
+			<input type="search" id="catalog-search" class="admin-form__input" placeholder="e.g. wikipedia">
+		</label>
+		<label class="catalog-filter">
+			<span>Language</span>
+			<select id="catalog-language" class="admin-form__input">
+				<option value="">All languages</option>
+			</select>
+		</label>
+		<label class="catalog-filter">
+			<span>Category</span>
+			<select id="catalog-category" class="admin-form__input">
+				<option value="">All categories</option>
+			</select>
+		</label>
+		<label class="catalog-filter">
+			<span>Size</span>
+			<select id="catalog-size" class="admin-form__input">
+				<option value="">Any size</option>
+				<option value="0:104857600">&lt; 100 MB</option>
+				<option value="104857600:1073741824">100 MB – 1 GB</option>
+				<option value="1073741824:10737418240">1 – 10 GB</option>
+				<option value="10737418240:">&gt; 10 GB</option>
+			</select>
+		</label>
+	</div>
+</section>
+
+<section class="catalog-section" aria-labelledby="catalog-list-title">
+	<h3 id="catalog-list-title" class="storage-section__title">Books <span class="catalog-count" id="catalog-count">…</span></h3>
+	<div id="catalog-list" data-catalog-list>
+		{% if book_count == 0 %}
+		<p class="storage-row storage-row--empty">No catalog yet — refresh while online to fetch.</p>
+		{% else %}
+		<p class="storage-row storage-row--empty">Loading…</p>
+		{% endif %}
+	</div>
+	<nav class="catalog-pager" id="catalog-pager"></nav>
+</section>
+
+<section class="catalog-section" aria-labelledby="catalog-queue-title">
+	<h3 id="catalog-queue-title" class="storage-section__title">Downloads</h3>
+	<ul class="storage-list" data-catalog-queue>
+		<li class="storage-row storage-row--empty">No downloads yet.</li>
+	</ul>
+</section>
+{% endblock %}
