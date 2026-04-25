@@ -41,12 +41,23 @@ human_size() {
 # the caller doesn't have to care whether kiwix-manage stored it
 # relative to library.xml (it does).
 #
-# The UUID from `id=` is what kiwix-serve's search endpoint accepts as
-# `books.id=<uuid>`. `books.name=<name>` looks like it should work too
-# but empirically returns "No such book" on kiwix-tools 3.7; UUID is
-# the reliable selector.
+# Two identifiers for each book live in library.xml: an internal
+# `name` (e.g. wikipedia_ab_all) used for OPDS metadata and as the
+# only reliable selector for `books.id`-style API calls; and a
+# file-basename URL slug (e.g. wikipedia_ab_all_nopic_2026-04) that
+# kiwix-serve uses in its public URL routes (/content/<slug> and the
+# viewer's #<slug> fragment). The slug is the .zim filename minus
+# the extension -- not surfaced as an XML attribute, so we derive
+# it from the `path=` attribute.
 #
-# Emits one TSV line per book: id<TAB>name<TAB>title<TAB>absolute_path<TAB>articleCount
+# Caveats from kiwix-tools 3.7:
+#  - books.name=<name> returns "No such book" even for an exact
+#    match. Use books.id=<UUID> instead.
+#  - /library/<name>/ redirects to /library/content/<name>/, which
+#    404s; only /library/content/<slug>/ works.
+#
+# Emits one TSV line per book:
+#   id<TAB>name<TAB>slug<TAB>title<TAB>absolute_path<TAB>articleCount
 library_entries() {
   [[ -f "$LIB_XML" ]] || return 0
   awk -v zimdir="$ZIM_DIR" '
@@ -59,9 +70,12 @@ library_entries() {
       if (match($0, /[[:space:]]articleCount="[^"]*"/)) count=substr($0, RSTART+15, RLENGTH-16);
       if (id == "" || name == "" || path == "") next;
       n = split(path, parts, "/");
-      abs = zimdir "/" parts[n];
+      filename = parts[n];
+      abs = zimdir "/" filename;
+      slug = filename;
+      sub(/\.zim$/, "", slug);
       if (title == "") title = name;
-      print id "\t" name "\t" title "\t" abs "\t" count;
+      print id "\t" name "\t" slug "\t" title "\t" abs "\t" count;
     }
   ' "$LIB_XML"
 }
@@ -117,7 +131,7 @@ rebuild_fragment() {
   trap "rm -f '$tiles_tmp' '$search_tmp'" RETURN
 
   local count=0 ids=()
-  while IFS=$'\t' read -r id name title abs_path articles; do
+  while IFS=$'\t' read -r id name slug title abs_path articles; do
     [[ -z "$name" ]] && continue
     local size_bytes size_h articles_txt
     size_bytes=$(stat -c%s "$abs_path" 2>/dev/null || echo 0)
@@ -130,10 +144,10 @@ rebuild_fragment() {
     count=$((count + 1))
     ids+=("$id")
     {
-      printf '<article class="tile tile--library" aria-labelledby="tile-zim-%s-title">\n' "$(html_escape "$name")"
+      printf '<article class="tile tile--library" aria-labelledby="tile-zim-%s-title">\n' "$(html_escape "$slug")"
       printf '  <div class="tile__icon" aria-hidden="true">📖</div>\n'
-      printf '  <h2 id="tile-zim-%s-title" class="tile__title">\n' "$(html_escape "$name")"
-      printf '    <a href="/library/viewer#%s">%s</a>\n' "$(html_escape "$name")" "$(html_escape "$title")"
+      printf '  <h2 id="tile-zim-%s-title" class="tile__title">\n' "$(html_escape "$slug")"
+      printf '    <a href="/library/viewer#%s">%s</a>\n' "$(html_escape "$slug")" "$(html_escape "$title")"
       printf '  </h2>\n'
       printf '  <p class="tile__desc">%s</p>\n' "$articles_txt"
       printf '  <p class="tile__status">%s on disk</p>\n' "$(html_escape "$size_h")"
