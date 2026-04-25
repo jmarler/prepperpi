@@ -28,7 +28,13 @@ PrivateDevices=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# AF_NETLINK is required so the uplink detector (E4-S3) can shell out to
+# `ip -j route show default`. iproute2 uses netlink to query the kernel;
+# without it, the call fails with "Cannot open netlink socket" and the
+# admin home page falsely renders as Offline. AF_NETLINK only allows
+# read-style queries here — the unit still has no CAP_NET_ADMIN, so it
+# can't *write* anything to the kernel via netlink.
 ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
 # /boot/firmware has to be writable IN THE NAMESPACE so the sudo'd
 # wrapper can rewrite prepperpi.conf -- a read-only bind mount blocks

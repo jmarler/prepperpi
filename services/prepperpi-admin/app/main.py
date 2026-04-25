@@ -24,6 +24,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from uplink import detect_uplink
+
 APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR = APP_DIR / "static"
@@ -138,12 +140,19 @@ async def healthz() -> dict:
     return {"ok": True}
 
 
+@app.get("/admin/uplink")
+async def uplink_state() -> dict:
+    """JSON endpoint polled by admin.js to live-update the home banner.
+    Same shape as the dict passed into the home template."""
+    return detect_uplink()
+
+
 @app.get("/admin", response_class=HTMLResponse)
 @app.get("/admin/", response_class=HTMLResponse)
 async def admin_home(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         "home.html",
-        {"request": request, "active": "home"},
+        {"request": request, "active": "home", "uplink": detect_uplink()},
     )
 
 

@@ -147,6 +147,39 @@
 	margin-top: 1.5rem;
 }
 
+/* Uplink status banner — shown on the admin home page. */
+.uplink-banner {
+	margin: 1rem 0 1.25rem;
+	padding: 0.75rem 1rem;
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	font-size: 0.95rem;
+}
+
+.uplink-banner code {
+	background: var(--panel);
+	padding: 0.05rem 0.3rem;
+	border-radius: 3px;
+	font-size: 0.9em;
+}
+
+.uplink-banner--online {
+	background: rgba(60, 180, 80, 0.1);
+	border-color: #3cb450;
+}
+
+.uplink-banner--offline {
+	background: var(--panel-dim);
+	border-color: var(--border);
+	color: var(--ink-dim);
+}
+
+.admin-footnote-info {
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+	margin-top: 1rem;
+}
+
 /* Flash banners */
 .flash {
 	margin: 1rem 0;

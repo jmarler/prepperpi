@@ -57,6 +57,25 @@ passthrough Wi-Fi adapter that supports AP mode. That's the scope of
 the follow-up integration test in `tests/integration/`; not shipped in
 this story.
 
+## E4-S3 — Forward-block firewall rule
+
+Since E4-S3, `prepperpi-ap-configure.sh` also installs a one-line nftables rule that **rejects any traffic forwarded out of `wlan0`**:
+
+```
+table inet prepperpi-ap {
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+    iifname "wlan0" reject
+  }
+}
+```
+
+This is the security boundary for **AC-3 of E4-S3 (Online mode)**. When an Ethernet (or future USB-Wi-Fi-dongle) uplink is active, the Pi can reach the internet, but **AP clients on `10.42.0.0/24` cannot** — the kernel rejects forwarded packets that came in on `wlan0`. The Pi is a content host, not a hotspot.
+
+We also pin `net.ipv4.ip_forward=0` on every boot for belt-and-suspenders. The `nft` rule still wins if a future story or operator deliberately enables forwarding.
+
+The rule lives in our own table (`inet prepperpi-ap`) so we don't conflict with whatever else might be in `inet filter`. The configure script is idempotent — it deletes our table first if it already exists, then re-creates it on every boot.
+
 ## Known limitations
 
 - **2.4 GHz only.** The Pi's onboard Broadcom/Cypress chipset can do 5 GHz client-mode reliably but AP-mode support is regulatory-domain-dependent and flaky. We ship 2.4 GHz for best range and compatibility. A future story can add a `BAND=5` mode for operators with known-good firmware.

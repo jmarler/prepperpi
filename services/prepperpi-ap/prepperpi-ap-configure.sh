@@ -216,6 +216,43 @@ release_radio() {
   fi
 }
 
+install_forward_block() {
+  # E4-S3 AC-3: AP clients must not be able to reach an upstream uplink
+  # (Ethernet, future USB Wi-Fi dongle, anything). Block forwarding from
+  # the AP interface in our own nftables table so we don't trip over
+  # whatever else might already exist in `inet filter`.
+  #
+  # We also pin net.ipv4.ip_forward=0 so the kernel won't forward in the
+  # first place — belt-and-suspenders against a future story or a curious
+  # operator flipping the sysctl. The nft rule still wins if someone later
+  # sets ip_forward=1 deliberately.
+  local iface="$1"
+
+  if ! command -v nft >/dev/null 2>&1; then
+    log "WARNING: nft not installed; skipping forward-block rule"
+    return 0
+  fi
+
+  # Make sure forwarding is off. Quiet on systems where the sysctl path
+  # doesn't exist (containers, weird kernels) so we don't fail the boot.
+  if [[ -w /proc/sys/net/ipv4/ip_forward ]]; then
+    printf '0' > /proc/sys/net/ipv4/ip_forward
+  fi
+
+  # Idempotent: drop the table if we owned it from a previous boot, then
+  # re-create it.
+  nft delete table inet prepperpi-ap 2>/dev/null || true
+  nft -f - <<NFT
+table inet prepperpi-ap {
+  chain forward {
+    type filter hook forward priority 0; policy accept;
+    iifname "${iface}" reject
+  }
+}
+NFT
+  log "installed nftables forward-block rule (iifname ${iface} reject)"
+}
+
 render_auth_block() {
   local pass="$1"
   if [[ -z "$pass" ]]; then
@@ -293,6 +330,8 @@ main() {
   fi
   ip link set "$INTERFACE" up
   ip addr add 10.42.0.1/24 dev "$INTERFACE"
+
+  install_forward_block "$INTERFACE"
 
   # Render configs.
   local auth_block
