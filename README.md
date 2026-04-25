@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **alpha**. The base appliance (Epic 1) and most of the content layer (Epic 2) are end-to-end verified on a Pi 4B. Maps, the admin console, and release engineering are still ahead.
+PrepperPi is **alpha**. The base appliance (Epic 1), most of the content layer (Epic 2), and the network panel of the admin console (Epic 4) are end-to-end verified on a Pi 4B. Maps, the rest of the admin console, and release engineering are still ahead.
 
 **What works today:**
 
@@ -27,12 +27,13 @@ PrepperPi is **alpha**. The base appliance (Epic 1) and most of the content laye
 - ✅ **Kiwix library** — drop a `.zim` into `/srv/prepperpi/zim/` and it appears as a tile within seconds; full search across all books; click a tile to open the Kiwix reader
 - ✅ **USB content hosting** — auto-mount FAT32/exFAT/NTFS/ext drives at `/srv/prepperpi/user-usb/<label>/`; in-browser file viewer with directory listing, PDF/image/video/audio playback, and Markdown rendering; ZIMs on USB auto-import into the kiwix library while plugged in (local-disk wins on duplicates); clean tear-down on unplug
 - ✅ **Live dashboard** — toast notifications and in-place tile refreshes when USB drives plug/unplug or library content changes; pure progressive enhancement (no-JS users see the same content with a manual refresh)
+- ✅ **Admin console — Network panel** — browser-based admin at `/admin/` reachable only from the AP subnet; change SSID, Wi-Fi password, channel, country, with one-click reset to factory defaults. Form-based with no-JS fallback; an unprivileged FastAPI process shells out via sudo to a privileged worker that's the only thing allowed to rewrite `/boot/firmware/prepperpi.conf` and bounce hostapd
 
 **Not yet shipped (planned):**
 
 - Catalog selector for downloading ZIMs over an online uplink (Epic 2-S3)
 - Vector tile server for offline maps (Epic 3)
-- Browser admin console for SSID / password / content / write-toggles (Epic 4)
+- Storage / Content / Online-mode panels in the admin console (Epic 4-S2 / E2-S3 / E4-S3)
 - One-click content bundles and update engine (Epic 5)
 - Config export, backup to USB (Epic 6)
 - Signed release images, auto-generated release notes (Epic 7)
@@ -173,7 +174,7 @@ Content bundles (`Starter`, `Premium`, `Medical-only`, `Education-only`) install
 
 **Phase 2 — Content and maps.** ⏳ **In progress.** Kiwix library serving (E2-S1) ✅, USB content hosting (E2-S2) ✅, live dashboard with event toasts (E2-S4) ✅. Still ahead: ZIM catalog selector for downloading over an uplink (E2-S3), and the entire offline vector-maps stack (E3).
 
-**Phase 3 — Admin console and updates.** Browser-based settings, live health, one-click content bundles, online mode for updates.
+**Phase 3 — Admin console and updates.** ⏳ **In progress.** Network settings panel (E4-S1) ✅. Still ahead: storage/health (E4-S2), online-mode toggle (E4-S3), one-click content bundles, update notifier.
 
 **Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
 
@@ -183,7 +184,8 @@ Possible futures (not committed): non-Pi SBC support, an optional offline LLM as
 
 - **Samsung Galaxy devices (One UI 5 / Android 13)** don't auto-open the captive portal on Wi-Fi attach — a documented vendor quirk that every captive portal hits. Workaround: after connecting, open a browser and type any URL; the portal will load. Stock Android (Pixel etc.) is expected to auto-pop but hasn't been tested on hardware.
 - **Pi 5 is not yet verified end-to-end.** All development and testing so far has been on a Pi 4B 8 GB. Pi 5 support is in the code (`pi_model_default_max_sta` differentiates them, raspi-firmware installs for both) but a fresh flash-and-boot test on a Pi 5 is still pending hardware availability.
-- **Maps and admin console aren't built yet.** Their landing-page tiles render as placeholder "Not installed" cards. TileServer GL (Phase 2 / E3) and the FastAPI admin console (Phase 3 / E4) replace them.
+- **Maps aren't built yet.** The landing-page Maps tile renders as a placeholder "Not installed" card. TileServer GL (Phase 2 / E3) replaces it.
+- **Admin console is partial.** Network settings work end-to-end; Storage, Content, and Online-mode panels are scoped to E4-S2 / E2-S3 / E4-S3 and currently render as "(soon)" cards on the admin overview.
 - **No content downloader UI.** Today you supply ZIMs by `cp` over SSH or by dropping them onto a USB. The in-browser catalog selector arrives in E2-S3.
 - **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are Phase 4.
 
