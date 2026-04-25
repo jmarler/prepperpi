@@ -1,0 +1,104 @@
+/* PrepperPi — Maps client. Full-viewport map with a slim header. */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #cbe3f4;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1c2530;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.map-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem;
+  background: #1c2530;
+  color: #fff;
+  border-bottom: 1px solid #0f1620;
+}
+
+.map-header__home {
+  color: #cfe2ff;
+  text-decoration: none;
+  font-size: 0.95rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+.map-header__home:hover,
+.map-header__home:focus { background: #2a3645; outline: none; }
+
+.map-header__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.map-main {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/* "No regions installed" overlay — same footprint as #map. */
+.map-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  background: #f3f6fb;
+  color: #2c3a4a;
+}
+.map-empty h2 {
+  font-size: 1.4rem;
+  margin: 0 0 0.5rem;
+  color: #1c2530;
+}
+.map-empty p {
+  max-width: 38rem;
+  margin: 0.5rem auto;
+  line-height: 1.5;
+}
+.map-empty code {
+  background: #e3eaf3;
+  padding: 0 0.25rem;
+  border-radius: 0.2rem;
+  font-size: 0.95em;
+}
+
+/* No-JS fallback (only rendered inside <noscript>). */
+.map-fallback {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #1c2530;
+}
+.map-fallback h2 { font-size: 1.4rem; margin: 0 0 1rem; }
+.map-fallback p  { margin: 0.75rem auto; max-width: 36rem; line-height: 1.5; }
+.map-fallback__art {
+  display: block;
+  width: min(90%, 520px);
+  height: auto;
+  margin: 1rem auto;
+  border: 1px solid #b9c8d9;
+  border-radius: 0.5rem;
+  background: #cbe3f4;
+}

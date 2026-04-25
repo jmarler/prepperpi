@@ -617,3 +617,102 @@
 .admin-form-reset {
 	margin-top: 0.5rem;
 }
+
+/* ---- /admin/maps (E3-S1) ---- */
+
+.admin-summary {
+	margin: 0.5rem 0 1rem;
+	font-size: 0.95rem;
+	color: var(--ink-dim);
+}
+
+.admin-summary strong {
+	color: var(--ink);
+}
+
+.admin-link-out {
+	margin-left: 0.75rem;
+	color: var(--accent);
+	text-decoration: none;
+}
+
+.admin-link-out:hover { text-decoration: underline; }
+
+.admin-empty {
+	padding: 1.25rem;
+	border: 1px dashed var(--border);
+	border-radius: var(--radius);
+	color: var(--ink-dim);
+	text-align: center;
+	margin: 1rem 0;
+}
+
+.admin-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.92rem;
+	margin: 0.75rem 0 1rem;
+}
+
+.admin-table th, .admin-table td {
+	padding: 0.55rem 0.5rem;
+	border-bottom: 1px solid var(--border);
+	vertical-align: top;
+	text-align: left;
+}
+
+.admin-table th {
+	font-weight: 600;
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.admin-table tbody tr:hover {
+	background: var(--panel);
+}
+
+.admin-cell-bounds {
+	font-variant-numeric: tabular-nums;
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+	white-space: nowrap;
+}
+
+.admin-row-desc {
+	margin: 0.3rem 0 0;
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+	line-height: 1.35;
+}
+
+.admin-code-muted {
+	font-size: 0.85rem;
+	color: var(--ink-dim);
+}
+
+.admin-btn {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	color: var(--ink);
+	padding: 0.4rem 0.75rem;
+	border-radius: var(--radius);
+	cursor: pointer;
+	font-size: 0.9rem;
+}
+
+.admin-btn:hover {
+	background: var(--panel-dim);
+}
+
+.admin-btn--danger {
+	border-color: #c33;
+	color: #d04040;
+	background: rgba(220, 50, 50, 0.05);
+}
+
+.admin-btn--danger:hover {
+	background: rgba(220, 50, 50, 0.15);
+	color: #fff;
+}

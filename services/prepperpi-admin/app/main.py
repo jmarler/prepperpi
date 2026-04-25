@@ -33,6 +33,7 @@ from fastapi.templating import Jinja2Templates
 import aria2
 import catalog
 import health
+import maps
 from uplink import detect_uplink
 
 APP_DIR = Path(__file__).resolve().parent
@@ -732,6 +733,53 @@ def downloads_clear(gid: str):
     except aria2.Aria2Error as exc:
         raise HTTPException(status_code=502, detail=str(exc))
     return {"ok": True}
+
+
+@app.get("/admin/maps", response_class=HTMLResponse)
+def maps_get(request: Request, ok: Optional[str] = None, err: Optional[str] = None) -> HTMLResponse:
+    """List installed map regions and offer per-region delete (E3-S1 AC-4).
+
+    Reads the regions JSON the reindex service maintains; never opens
+    .mbtiles files itself. The reindex script is the single writer of
+    that JSON, so the admin process can stay narrow.
+    """
+    regions = maps.read_regions()
+    flash = None
+    if ok:
+        flash = {"kind": "ok", "message": ok}
+    elif err:
+        flash = {"kind": "err", "message": err}
+    return templates.TemplateResponse(
+        "maps.html",
+        {
+            "request": request,
+            "active": "maps",
+            "regions": regions,
+            "total_size_human": maps.human_size(maps.total_size_bytes(regions)),
+            "flash": flash,
+        },
+    )
+
+
+@app.get("/admin/maps/data")
+def maps_data() -> dict:
+    """Cheap JSON snapshot for any future polled UI. Polled-once today."""
+    regions = maps.read_regions()
+    return {
+        "regions": regions,
+        "count": len(regions),
+        "total_size_bytes": maps.total_size_bytes(regions),
+    }
+
+
+@app.post("/admin/maps/{region_id}/delete")
+def maps_delete(region_id: str):
+    """Remove one region's .mbtiles. The path-watcher fires the reindex
+    asynchronously (~1s); the user sees the new state on the redirect
+    target, which re-reads the regions JSON."""
+    ok, msg = maps.delete_region(region_id)
+    qs = ("ok=" + msg) if ok else ("err=" + msg)
+    return RedirectResponse(url=f"/admin/maps?{qs}", status_code=303)
 
 
 @app.post("/admin/network/reset", response_class=HTMLResponse)

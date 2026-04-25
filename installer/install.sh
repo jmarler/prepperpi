@@ -36,6 +36,7 @@ readonly SERVICE_ORDER=(
   prepperpi-admin
   prepperpi-aria2c
   prepperpi-kiwix
+  prepperpi-tiles
   prepperpi-usb
 )
 
