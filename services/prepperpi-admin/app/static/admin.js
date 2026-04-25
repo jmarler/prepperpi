@@ -1,8 +1,10 @@
 // admin.js — progressive enhancement for the admin pages.
 //
-// Two independent feature blocks, both polling-based:
+// Four independent feature blocks, all polling-based:
 //   1. Home page: live-update the Ethernet uplink banner.
 //   2. Storage page: live-update CPU/RAM/temp/disk/USB/events at 1 Hz.
+//   3. Catalog page: poll aria2 queue + queue-form handlers.
+//   4. Maps page: regions catalog browser + install queue + 1 Hz status poll.
 //
 // Hard requirement (same as the landing-page dashboard.js): with JS
 // disabled the page must still render correctly via Jinja's request-time
@@ -577,5 +579,286 @@
 
     poll();
     setInterval(poll, POLL_INTERVAL_MS);
+  })();
+
+  // ---------- Block 4: maps page (catalog + install queue, E3-S2) ----------
+  (function () {
+    var catalogEl = document.getElementById("maps-catalog");
+    if (!catalogEl) return;       // Not on the maps page; bail.
+
+    var POLL_INTERVAL_MS = 1000;
+
+    // Local state. selection = set of region_ids the user has ticked;
+    // installQueue = remaining region_ids to fire after the current one
+    // completes; activeRegion = the one currently being installed.
+    var selection = new Set();
+    var installQueue = [];
+    var activeRegion = null;
+    var catalog = null;
+    var pollTimer = null;
+
+    var bundlesEl       = document.querySelector("[data-maps-bundles]");
+    var filterEl        = document.getElementById("maps-filter");
+    var freeSpaceEl     = document.getElementById("maps-free-space");
+    var selectedCountEl = document.getElementById("maps-selected-count");
+    var selectedBytesEl = document.getElementById("maps-selected-bytes");
+    var installSelBtn   = document.getElementById("maps-install-selected-btn");
+    var clearSelBtn     = document.getElementById("maps-clear-selection-btn");
+    var installCard     = document.getElementById("maps-install-card");
+    var installNameEl   = document.getElementById("maps-install-region-name");
+    var installLabelEl  = document.getElementById("maps-install-status-label");
+    var installProgEl   = document.getElementById("maps-install-progress-text");
+    var installBarEl    = document.getElementById("maps-install-progress-bar");
+    var installCancelEl = document.getElementById("maps-install-cancel-btn");
+
+    function humanSize(n) {
+      if (!n || n < 0) n = 0;
+      if (n >= 1024 * 1024 * 1024) return (n / (1024 * 1024 * 1024)).toFixed(1) + " GB";
+      if (n >= 1024 * 1024)        return Math.round(n / (1024 * 1024))       + " MB";
+      if (n >= 1024)               return Math.round(n / 1024)                + " KB";
+      return n + " B";
+    }
+
+    function escapeHtml(s) {
+      return String(s || "").replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+      });
+    }
+
+    function refreshSelectionStats() {
+      selectedCountEl.textContent = selection.size;
+      var total = 0;
+      var byId = {};
+      (catalog ? catalog.countries : []).forEach(function (c) { byId[c.id] = c; });
+      selection.forEach(function (rid) {
+        var entry = byId[rid];
+        if (entry) total += (entry.estimated_bytes || 0);
+      });
+      selectedBytesEl.textContent = humanSize(total);
+      installSelBtn.disabled = (selection.size === 0 || activeRegion !== null);
+    }
+
+    function renderBundles() {
+      bundlesEl.innerHTML = '<span class="admin-bundles__label">Quick-pick bundle:</span>';
+      (catalog.bundles || []).forEach(function (b) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "admin-bundles__btn";
+        btn.textContent = b.name + " (" + (b.countries || []).length + ")";
+        btn.addEventListener("click", function () {
+          // Toggle: if every member is already selected, deselect them
+          // all; otherwise add all not-yet-installed members.
+          var members = b.countries || [];
+          var installed = installedSet();
+          var allSelected = members.every(function (rid) {
+            return installed.has(rid) || selection.has(rid);
+          });
+          if (allSelected) {
+            members.forEach(function (rid) { selection.delete(rid); });
+          } else {
+            members.forEach(function (rid) {
+              if (!installed.has(rid)) selection.add(rid);
+            });
+          }
+          renderCountryList();
+          refreshSelectionStats();
+        });
+        bundlesEl.appendChild(btn);
+      });
+    }
+
+    function installedSet() {
+      var s = new Set();
+      (catalog ? catalog.countries : []).forEach(function (c) {
+        if (c.installed) s.add(c.id);
+      });
+      return s;
+    }
+
+    function renderCountryList() {
+      var query = (filterEl.value || "").trim().toLowerCase();
+      var rows = (catalog.countries || []).filter(function (c) {
+        if (!query) return true;
+        return c.name.toLowerCase().indexOf(query) >= 0
+            || c.id.toLowerCase().indexOf(query) >= 0;
+      });
+
+      var html = '<ul class="admin-catalog-grid">';
+      rows.forEach(function (c) {
+        var disabled = c.installed || activeRegion !== null;
+        var checked = selection.has(c.id);
+        var rowCls = "admin-catalog-row" + (c.installed ? " admin-catalog-row--installed" : "");
+        var aria = c.installed ? "Already installed" : "Select " + c.name;
+        html += '<li class="' + rowCls + '">'
+              +   '<label class="admin-catalog-row__label" title="' + escapeHtml(aria) + '">'
+              +     '<input type="checkbox" data-region-id="' + escapeHtml(c.id) + '"'
+              +       (checked ? ' checked' : '')
+              +       (disabled ? ' disabled' : '')
+              +       '>'
+              +     '<span class="admin-catalog-row__iso">' + escapeHtml(c.id) + '</span>'
+              +     '<span class="admin-catalog-row__name">' + escapeHtml(c.name) + '</span>'
+              +     '<span class="admin-catalog-row__size">' + escapeHtml(c.estimated_human || "—") + '</span>'
+              +     '<span class="admin-catalog-row__state">'
+              +       (c.installed ? "Installed" : "")
+              +     '</span>'
+              +   '</label>'
+              + '</li>';
+      });
+      html += '</ul>';
+      catalogEl.innerHTML = html;
+
+      // Wire checkbox events.
+      catalogEl.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
+        cb.addEventListener("change", function (ev) {
+          var rid = cb.getAttribute("data-region-id");
+          if (cb.checked) selection.add(rid); else selection.delete(rid);
+          refreshSelectionStats();
+        });
+      });
+    }
+
+    function loadCatalog() {
+      return fetch("/admin/maps/catalog", { credentials: "same-origin" })
+        .then(function (res) {
+          if (!res.ok) throw new Error("catalog fetch " + res.status);
+          return res.json();
+        })
+        .then(function (data) {
+          catalog = data;
+          freeSpaceEl.textContent = data.free_space_human || "?";
+          renderBundles();
+          renderCountryList();
+          refreshSelectionStats();
+        })
+        .catch(function () {
+          catalogEl.innerHTML = '<p class="admin-empty">Could not load catalog. Reload to retry.</p>';
+        });
+    }
+
+    function applyStatus(s) {
+      var statusName = s && s.status;
+      var inFlight = (statusName === "starting" || statusName === "extracting");
+      if (inFlight) {
+        activeRegion = s.region_id;
+        installCard.hidden = false;
+        installNameEl.textContent = s.name || s.region_id;
+        installLabelEl.textContent = statusName === "starting" ? "Starting…" : "Extracting";
+        var done = s.bytes_so_far || 0;
+        var est = s.estimated_bytes || 0;
+        installProgEl.textContent = humanSize(done)
+          + (est > 0 ? " / ~" + humanSize(est) : " / unknown");
+        var pct = (est > 0) ? Math.min(100, Math.round((done / est) * 100)) : 0;
+        installBarEl.style.width = pct + "%";
+        installCancelEl.disabled = false;
+      } else {
+        // Terminal state: hide the card, refresh catalog so installed
+        // list is current, fire next queued job (if any).
+        installCard.hidden = true;
+        installCancelEl.disabled = true;
+        if (activeRegion) {
+          activeRegion = null;
+          loadCatalog().then(function () {
+            if (statusName === "complete") {
+              showToast("Installed " + ((s && s.name) || "region") + ". Live map updates in a few seconds.");
+            } else if (statusName === "failed" || statusName === "stalled") {
+              showToast("Install failed. See /var/lib/prepperpi/maps/.status/last-extract.log on the Pi.");
+              installQueue = [];
+            } else if (statusName === "cancelled") {
+              installQueue = [];
+            }
+            kickQueue();
+          });
+        }
+      }
+    }
+
+    function pollStatus() {
+      fetch("/admin/maps/install/status", { credentials: "same-origin" })
+        .then(function (res) { if (!res.ok) throw 0; return res.json(); })
+        .then(applyStatus)
+        .catch(function () { /* ignore — keep last state */ });
+    }
+
+    function kickQueue() {
+      if (activeRegion !== null) return;
+      var next = installQueue.shift();
+      if (!next) return;
+      var fd = new FormData();
+      fd.append("region_id", next);
+      fetch("/admin/maps/install", { method: "POST", body: fd, credentials: "same-origin" })
+        .then(function (res) {
+          if (res.status === 202 || res.ok) return res.json();
+          return res.text().then(function (body) {
+            // FastAPI returns {"detail": "..."} for HTTPException.
+            var msg = body;
+            try { msg = (JSON.parse(body) || {}).detail || body; } catch (_) {}
+            throw new Error(msg);
+          });
+        })
+        .then(function (resp) {
+          activeRegion = next;
+          if (resp && resp.snapshot) applyStatus(resp.snapshot);
+        })
+        .catch(function (err) {
+          showToast("Couldn't queue: " + (err && err.message || err));
+          // Skip this one and try the next.
+          kickQueue();
+        });
+    }
+
+    function showToast(msg) {
+      // Reuse landing's toast container if present (we're under /admin/
+      // so the landing-page toast container isn't rendered). Inject a
+      // simple inline floater instead.
+      var c = document.getElementById("admin-toasts");
+      if (!c) {
+        c = document.createElement("div");
+        c.id = "admin-toasts";
+        c.className = "admin-toasts";
+        document.body.appendChild(c);
+      }
+      var t = document.createElement("div");
+      t.className = "admin-toast";
+      t.textContent = msg;
+      c.appendChild(t);
+      requestAnimationFrame(function () { t.classList.add("admin-toast--visible"); });
+      setTimeout(function () {
+        t.classList.remove("admin-toast--visible");
+        setTimeout(function () { if (t.parentNode) t.parentNode.removeChild(t); }, 300);
+      }, 5000);
+    }
+
+    // Wire UI controls.
+    filterEl.addEventListener("input", function () { if (catalog) renderCountryList(); });
+    clearSelBtn.addEventListener("click", function () {
+      selection.clear();
+      if (catalog) renderCountryList();
+      refreshSelectionStats();
+    });
+    installSelBtn.addEventListener("click", function () {
+      if (selection.size === 0 || activeRegion !== null) return;
+      // Snapshot selection into queue, clear visible selection, kick.
+      installQueue = Array.from(selection);
+      selection.clear();
+      if (catalog) renderCountryList();
+      refreshSelectionStats();
+      kickQueue();
+    });
+    installCancelEl.addEventListener("click", function () {
+      installCancelEl.disabled = true;
+      fetch("/admin/maps/install/cancel", { method: "POST", credentials: "same-origin" })
+        .catch(function () { /* fall through to status poll */ });
+    });
+
+    loadCatalog().then(function () { pollStatus(); });
+    pollTimer = setInterval(pollStatus, POLL_INTERVAL_MS);
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) {
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      } else if (!pollTimer) {
+        pollStatus();
+        pollTimer = setInterval(pollStatus, POLL_INTERVAL_MS);
+      }
+    });
   })();
 })();

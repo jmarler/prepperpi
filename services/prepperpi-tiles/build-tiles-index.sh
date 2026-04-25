@@ -17,8 +17,8 @@ set -euo pipefail
 
 readonly MAPS_DIR="${MAPS_DIR:-/srv/prepperpi/maps}"
 readonly TS_CONF_DIR="${TS_CONF_DIR:-/etc/prepperpi/tileserver}"
-readonly STYLE_TEMPLATE="${STYLE_TEMPLATE:-${TS_CONF_DIR}/styles/osm-bright/style.template.json}"
-readonly STYLE_OUT="${STYLE_OUT:-${TS_CONF_DIR}/styles/osm-bright/style.json}"
+readonly STYLE_TEMPLATE="${STYLE_TEMPLATE:-${TS_CONF_DIR}/styles/protomaps/style.template.json}"
+readonly STYLE_OUT="${STYLE_OUT:-${TS_CONF_DIR}/styles/protomaps/style.json}"
 readonly CONFIG_OUT="${CONFIG_OUT:-${TS_CONF_DIR}/config.json}"
 readonly FRAGMENT="${FRAGMENT:-/opt/prepperpi/web/landing/_maps.html}"
 readonly REGIONS_JSON="${REGIONS_JSON:-/var/lib/prepperpi/maps/regions.json}"

@@ -743,7 +743,7 @@ def maps_get(request: Request, ok: Optional[str] = None, err: Optional[str] = No
     .mbtiles files itself. The reindex script is the single writer of
     that JSON, so the admin process can stay narrow.
     """
-    regions = maps.read_regions()
+    regions = maps.enrich_with_catalog_names(maps.read_regions())
     flash = None
     if ok:
         flash = {"kind": "ok", "message": ok}
@@ -774,12 +774,81 @@ def maps_data() -> dict:
 
 @app.post("/admin/maps/{region_id}/delete")
 def maps_delete(region_id: str):
-    """Remove one region's .mbtiles. The path-watcher fires the reindex
-    asynchronously (~1s); the user sees the new state on the redirect
-    target, which re-reads the regions JSON."""
+    """Remove one region's .mbtiles or .pmtiles. The path-watcher fires
+    the reindex asynchronously (~1s); the user sees the new state on
+    the redirect target, which re-reads the regions JSON."""
     ok, msg = maps.delete_region(region_id)
     qs = ("ok=" + msg) if ok else ("err=" + msg)
     return RedirectResponse(url=f"/admin/maps?{qs}", status_code=303)
+
+
+@app.get("/admin/maps/catalog")
+def maps_catalog() -> dict:
+    """Return the catalog of available regions for the install UI (E3-S2).
+
+    Enriches each country with `installed: true/false` so the UI can
+    render the right state without a second call. Also includes free
+    disk space so the UI can flag oversized picks.
+    """
+    catalog = maps.read_catalog()
+    installed = maps.installed_region_ids()
+    countries = []
+    for c in catalog.get("countries", []):
+        if not isinstance(c, dict):
+            continue
+        cid = c.get("id", "")
+        countries.append({
+            **c,
+            "installed": cid in installed,
+            "estimated_human": maps.human_size(int(c.get("estimated_bytes") or 0)),
+        })
+    return {
+        "version": catalog.get("version"),
+        "source_url": catalog.get("source_url"),
+        "source_attribution": catalog.get("source_attribution"),
+        "bundles": catalog.get("bundles", []),
+        "countries": countries,
+        "free_space_bytes": maps.free_space_bytes(),
+        "free_space_human": maps.human_size(maps.free_space_bytes()),
+    }
+
+
+@app.get("/admin/maps/install/status")
+def maps_install_status() -> dict:
+    """Snapshot of the active or last-completed install. Polled at 1Hz
+    by the maps page when an install is running."""
+    status = maps.read_install_status()
+    if status is None:
+        return {"status": "idle"}
+    return status
+
+
+@app.post("/admin/maps/install")
+def maps_install_start(region_id: str = Form(...)):
+    """Spawn extract-region.sh for one country. Returns 202 on success,
+    409 if another install is running, 400 on validation, 507 if disk
+    space insufficient."""
+    ok, msg, status = maps.start_install(region_id)
+    if ok:
+        return {"status": "starting", "message": msg, "snapshot": status}
+    # Map common failure modes to status codes the UI can branch on.
+    code = 400
+    if "already installed" in msg.lower():
+        code = 409
+    elif "already in progress" in msg.lower() or "another install" in msg.lower():
+        code = 409
+    elif "not enough free space" in msg.lower():
+        code = 507
+    raise HTTPException(status_code=code, detail=msg)
+
+
+@app.post("/admin/maps/install/cancel")
+def maps_install_cancel():
+    """SIGTERM the running install. Idempotent — returns 200 with a
+    descriptive message even if there's nothing to cancel, so the UI
+    doesn't have to handle 4xx for an idle state."""
+    ok, msg = maps.cancel_install()
+    return {"ok": ok, "message": msg}
 
 
 @app.post("/admin/network/reset", response_class=HTMLResponse)

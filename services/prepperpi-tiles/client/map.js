@@ -16,7 +16,7 @@
 (function () {
   "use strict";
 
-  var STYLE_URL = "/maps/styles/osm-bright/style.json";
+  var STYLE_URL = "/maps/styles/protomaps/style.json";
 
   function showEmpty() {
     var canvas = document.getElementById("map");

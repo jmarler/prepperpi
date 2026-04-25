@@ -1,32 +1,36 @@
-"""tiles_indexer — pure helpers for the MBTiles → composite-style pipeline.
+"""tiles_indexer — pure helpers for the MBTiles/PMTiles → composite-style pipeline.
 
 The reindex flow is:
 
-  /srv/prepperpi/maps/{region}.mbtiles
+  /srv/prepperpi/maps/{region}.{mbtiles,pmtiles}
         │
-        │  read_region_metadata()  ← opens SQLite, pulls metadata table
+        │  read_region_metadata()  ← MBTiles: SQLite metadata table
+        │                            PMTiles: 127-byte header + JSON metadata blob
         ▼
   list[Region]
         │
         │  build_tileserver_config(...)   build_composite_style(...)
         ▼                                 ▼
-  config.json                       styles/osm-bright/style.json
+  config.json                       styles/protomaps/style.json
   (tells tileserver-gl-light        (composite style with one source +
-   which mbtiles to load)            duplicated layers per region)
+   which sources to load)            duplicated layers per region)
 
 Plus:
   render_landing_fragment(regions) -> HTML for the Maps tile.
 
 Everything in this module is a pure function except `read_region_metadata`,
-which has been kept narrow (one sqlite open + one SELECT) so the orchestrator
-can mock or substitute at the I/O boundary. The functions that actually
+which has been kept narrow (one open + one read) so the orchestrator can
+mock or substitute at the I/O boundary. The functions that actually
 generate config + style + HTML are pure dict/string transforms — they are
 the surface unit-tested in tests/unit/test_tiles_indexer.py.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import sqlite3
+import struct
+import zlib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -36,15 +40,19 @@ from typing import Any, Iterable, Optional
 
 @dataclass
 class Region:
-    """One installed MBTiles region.
+    """One installed map region (MBTiles or PMTiles).
 
-    `region_id` is the basename without `.mbtiles` (e.g. "north-america").
+    `region_id` is the basename without the extension (e.g. "north-america").
     It's used both as the tileserver `data` key and as a suffix on every
     style layer + source so a composite of N regions has 1 source and L
     layers per region (L ~= 50 for OSM-Bright).
+
+    `kind` is "mbtiles" or "pmtiles" — drives the data entry shape in
+    tileserver-gl-light's config.json.
     """
     region_id: str
     path: Path
+    kind: str                                   # "mbtiles" | "pmtiles"
     name: str
     format: str
     minzoom: int
@@ -60,6 +68,16 @@ class Region:
 # ---------- I/O boundary (kept narrow on purpose) ----------
 
 def read_region_metadata(path: Path) -> Optional[Region]:
+    """Dispatch on file extension to the right reader."""
+    suffix = path.suffix.lower()
+    if suffix == ".mbtiles":
+        return _read_mbtiles_metadata(path)
+    if suffix == ".pmtiles":
+        return _read_pmtiles_metadata(path)
+    return None
+
+
+def _read_mbtiles_metadata(path: Path) -> Optional[Region]:
     """Open one .mbtiles, read its metadata table, return a Region.
 
     Returns None if the file isn't a valid MBTiles (no metadata table,
@@ -111,6 +129,7 @@ def read_region_metadata(path: Path) -> Optional[Region]:
     return Region(
         region_id=region_id,
         path=path,
+        kind="mbtiles",
         name=meta.get("name") or region_id,
         format=fmt,
         minzoom=_to_int(meta.get("minzoom"), 0),
@@ -122,6 +141,125 @@ def read_region_metadata(path: Path) -> Optional[Region]:
         size_bytes=size_bytes,
         vector_layers=vector_layers,
     )
+
+
+# PMTiles v3 spec: https://github.com/protomaps/PMTiles/blob/main/spec/v3/spec.md
+# The first 127 bytes are a fixed-layout header. After that the file has
+# a root directory, optional leaf directories, a JSON metadata blob, and
+# the tile data. We only need the header + JSON blob for our purposes.
+_PMTILES_MAGIC = b"PMTiles\x03"
+_PMTILES_HEADER_LEN = 127
+
+# tile_type enum
+_PMTILES_TYPE_TO_FORMAT = {
+    1: "pbf",       # MVT (Mapbox Vector Tiles, the OSM-Bright/OpenMapTiles format)
+    2: "png",
+    3: "jpg",
+    4: "webp",
+    5: "avif",
+}
+
+# internal_compression / tile_compression enum
+_PMTILES_NONE = 1
+_PMTILES_GZIP = 2
+_PMTILES_BROTLI = 3
+_PMTILES_ZSTD = 4
+
+
+def _read_pmtiles_metadata(path: Path) -> Optional[Region]:
+    """Parse a .pmtiles file's fixed header + JSON metadata blob.
+
+    Returns None if the magic doesn't match or required fields are
+    unreadable. We never read tile data — just the header and the
+    metadata blob (typically <10 KB), so this is cheap even for
+    multi-GB regional extracts.
+    """
+    try:
+        size_bytes = path.stat().st_size
+    except OSError:
+        return None
+
+    try:
+        with path.open("rb") as f:
+            header_bytes = f.read(_PMTILES_HEADER_LEN)
+            if len(header_bytes) != _PMTILES_HEADER_LEN:
+                return None
+            if header_bytes[:8] != _PMTILES_MAGIC:
+                return None
+            (
+                _root_off, _root_len,
+                json_meta_off, json_meta_len,
+                _leaf_off, _leaf_len,
+                _tile_data_off, _tile_data_len,
+                _addr_count, _entry_count, _content_count,
+                _clustered, internal_compression, _tile_compression, tile_type,
+                min_zoom, max_zoom,
+                min_lon_e7, min_lat_e7, max_lon_e7, max_lat_e7,
+                center_zoom, center_lon_e7, center_lat_e7,
+            ) = struct.unpack_from(
+                "<QQQQQQQQQQQBBBBBBiiiiBii",
+                header_bytes,
+                offset=8,
+            )
+
+            f.seek(json_meta_off)
+            blob = f.read(json_meta_len)
+    except (OSError, struct.error):
+        return None
+
+    raw = _pmtiles_decompress(blob, internal_compression)
+    if raw is None:
+        return None
+    try:
+        meta = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        meta = {}
+
+    fmt = _PMTILES_TYPE_TO_FORMAT.get(tile_type)
+    if fmt is None:
+        return None
+
+    bounds = (min_lon_e7 / 1e7, min_lat_e7 / 1e7, max_lon_e7 / 1e7, max_lat_e7 / 1e7)
+    center = (center_lon_e7 / 1e7, center_lat_e7 / 1e7, float(center_zoom))
+
+    vector_layers = meta.get("vector_layers")
+    if not isinstance(vector_layers, list):
+        vector_layers = []
+
+    return Region(
+        region_id=path.stem,
+        path=path,
+        kind="pmtiles",
+        name=meta.get("name") or path.stem,
+        format=fmt,
+        minzoom=min_zoom,
+        maxzoom=max_zoom,
+        bounds=bounds,
+        center=center,
+        attribution=meta.get("attribution") or "",
+        description=meta.get("description") or "",
+        size_bytes=size_bytes,
+        vector_layers=vector_layers,
+    )
+
+
+def _pmtiles_decompress(data: bytes, compression: int) -> Optional[bytes]:
+    """Decompress a PMTiles internal blob per the file's compression enum.
+
+    Brotli/zstd require third-party libraries; we don't pull those into
+    the install dependency tree. Almost all real-world PMTiles use gzip
+    (or none) for the metadata blob, so unknown variants degrade to
+    "skip" rather than crash — the caller treats that as "no metadata"
+    and we fall back to header-only fields.
+    """
+    if compression == _PMTILES_NONE:
+        return data
+    if compression == _PMTILES_GZIP:
+        try:
+            return gzip.decompress(data)
+        except (OSError, zlib.error):
+            return None
+    return None
 
 
 def _parse_csv_floats(raw: str, n: int) -> Optional[tuple[float, ...]]:
@@ -146,26 +284,37 @@ def _to_int(raw: Any, default: int) -> int:
 # ---------- region discovery (filesystem only) ----------
 
 def discover_regions(maps_dir: Path) -> list[Region]:
-    """Return all valid MBTiles regions in `maps_dir`, sorted by region_id.
+    """Return all valid MBTiles/PMTiles regions in `maps_dir`, sorted by region_id.
 
     Invalid or unreadable files are silently skipped — the orchestrator
     is responsible for surfacing those (it walks the same dir and logs
     misses).
+
+    If a region is present in BOTH formats (e.g. `us.mbtiles` and
+    `us.pmtiles`), the PMTiles wins — that's the format the E3-S2
+    downloader produces, so we treat it as the canonical install. Same
+    region_id, second copy ignored.
     """
     if not maps_dir.is_dir():
         return []
-    regions: list[Region] = []
+    by_id: dict[str, Region] = {}
+    # Pass 1 — MBTiles. Pass 2 — PMTiles overrides if same region_id.
     for entry in sorted(maps_dir.iterdir()):
         if entry.is_file() and entry.suffix == ".mbtiles":
             r = read_region_metadata(entry)
             if r is not None:
-                regions.append(r)
-    return regions
+                by_id[r.region_id] = r
+    for entry in sorted(maps_dir.iterdir()):
+        if entry.is_file() and entry.suffix == ".pmtiles":
+            r = read_region_metadata(entry)
+            if r is not None:
+                by_id[r.region_id] = r
+    return sorted(by_id.values(), key=lambda r: r.region_id)
 
 
 # ---------- tileserver config.json (PURE) ----------
 
-def build_tileserver_config(regions: Iterable[Region], style_id: str = "osm-bright") -> dict[str, Any]:
+def build_tileserver_config(regions: Iterable[Region], style_id: str = "protomaps") -> dict[str, Any]:
     """Build the config.json that tileserver-gl-light loads at startup.
 
     `data` keys mirror region_id, with mbtiles paths relative to the
@@ -180,10 +329,14 @@ def build_tileserver_config(regions: Iterable[Region], style_id: str = "osm-brig
     region_list = list(regions)
     data: dict[str, dict[str, str]] = {}
     for r in region_list:
-        # The mbtiles value is resolved relative to options.paths.mbtiles
-        # by tileserver-gl-light, so we emit just the filename here. The
-        # paths block below points "mbtiles" at our symlinked maps dir.
-        data[r.region_id] = {"mbtiles": f"{r.region_id}.mbtiles"}
+        # tileserver-gl-light v5 resolves data values relative to
+        # options.paths.mbtiles. We symlink /srv/prepperpi/maps in there at
+        # install time, so a bare filename is enough. The key (`mbtiles`
+        # vs `pmtiles`) tells the daemon which adapter to load.
+        if r.kind == "pmtiles":
+            data[r.region_id] = {"pmtiles": f"{r.region_id}.pmtiles"}
+        else:
+            data[r.region_id] = {"mbtiles": f"{r.region_id}.mbtiles"}
 
     config: dict[str, Any] = {
         "options": {
@@ -192,7 +345,13 @@ def build_tileserver_config(regions: Iterable[Region], style_id: str = "osm-brig
                 "fonts": "fonts",
                 "sprites": "sprites",
                 "styles": "styles",
+                # Both formats live in the same dir (symlinked to
+                # /srv/prepperpi/maps at install time). tileserver-gl-light
+                # routes data values keyed `mbtiles:` through paths.mbtiles
+                # and `pmtiles:` through paths.pmtiles, so we point both
+                # at the same place.
                 "mbtiles": "mbtiles",
+                "pmtiles": "mbtiles",
             },
         },
         "styles": {},
@@ -217,16 +376,16 @@ def build_composite_style(
     regions: Iterable[Region],
     *,
     public_url_prefix: str = "/maps/",
-    sprite_id: str = "osm-bright",
+    sprite_id: str = "protomaps",
 ) -> dict[str, Any]:
     """Build a composite MapLibre style that overlays all installed regions.
 
     `template` is the upstream OSM-Bright style.json. It assumes a single
-    vector source named `openmaptiles`. We rewrite it to:
+    vector source (we don't care what the template called it). We rewrite it to:
 
-      sources:   one per region, keyed `openmaptiles__<region_id>`
+      sources:   one per region, keyed `region__<region_id>`
                  (note the double-underscore — single underscores show up
-                 in OSM-Bright source-layer names like `transportation_name`,
+                 in some schemas' source-layer names like `transportation_name`,
                  so we need a separator that won't collide)
       layers:    each original vector-tile-backed layer is duplicated
                  N times, one per region, with `id` suffixed and `source`
@@ -309,7 +468,7 @@ def build_composite_style(
 def _source_key(region_id: str) -> str:
     # OSM-Bright source-layer names use single underscores; use double to
     # keep our region suffix from looking like part of one.
-    return f"openmaptiles__{region_id}"
+    return f"region__{region_id}"
 
 
 # ---------- landing-page Maps tile fragment (PURE) ----------
@@ -377,6 +536,7 @@ def regions_summary(regions: Iterable[Region]) -> list[dict[str, Any]]:
         {
             "region_id": r.region_id,
             "name": r.name,
+            "kind": r.kind,
             "size_bytes": r.size_bytes,
             "size_human": _human_size(r.size_bytes),
             "minzoom": r.minzoom,

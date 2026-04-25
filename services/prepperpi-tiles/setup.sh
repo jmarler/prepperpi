@@ -21,6 +21,7 @@
 #   - osm-bright-gl-style       (GitHub releases)
 #   - osm-bright sprite atlas   (GitHub Pages, openmaptiles)
 #   - glyph PBFs                (bundled with tileserver-gl-styles via npm)
+#   - go-pmtiles binary         (GitHub releases — used by E3-S2 downloader)
 #
 # Safe to re-run.
 
@@ -45,10 +46,19 @@ readonly ADMIN_USER="${ADMIN_USER:-prepperpi-admin}"
 # old one is left in place harmlessly.
 readonly TILESERVER_GL_LIGHT_VERSION="5.0.0"
 readonly MAPLIBRE_GL_VERSION="4.7.1"
-readonly OSM_BRIGHT_VERSION="v1.20"
+readonly PROTOMAPS_THEMES_BASE_VERSION="4.5.0"
+readonly PROTOMAPS_SPRITE_VERSION="v4"
+readonly GO_PMTILES_VERSION="1.30.2"
 # Glyph fonts come from tileserver-gl-styles (a transitive dep of
 # tileserver-gl-light), not from openmaptiles/fonts directly — see
 # install_glyph_fonts() for why.
+#
+# We use Protomaps' basemap style (vector tiles, MIT-licensed) instead
+# of OSM-Bright. The matching planet PMTiles source is
+# build.protomaps.com — mapterhorn.com (initially scoped) ships WebP
+# raster tiles which can't render against any vector style. See
+# extract-region.sh for the date-walk-back logic that picks the latest
+# available daily build at extract time.
 
 log() { printf '[prepperpi-tiles/setup] %s\n' "$*"; }
 warn() { printf '[prepperpi-tiles/setup] WARN: %s\n' "$*" >&2; }
@@ -103,22 +113,22 @@ symlink_mbtiles() {
 }
 
 install_tileserver_gl_light() {
-  log "installing tileserver-gl-light@${TILESERVER_GL_LIGHT_VERSION} via npm"
+  log "installing tileserver-gl-light@${TILESERVER_GL_LIGHT_VERSION} + protomaps-themes-base@${PROTOMAPS_THEMES_BASE_VERSION} via npm"
   # Local install into DST_DIR/node_modules so the dependency tree is
-  # owned by us, version is pinned, and an apt-level npm upgrade can't
-  # silently mutate the runtime.
+  # owned by us, versions are pinned, and an apt-level npm upgrade
+  # can't silently mutate the runtime. We always (re)write package.json
+  # so dependency bumps in this setup.sh take effect on re-run.
   pushd "$DST_DIR" >/dev/null
-  if [[ ! -f package.json ]]; then
-    cat > package.json <<EOF
+  cat > package.json <<EOF
 {
   "name": "prepperpi-tiles",
   "private": true,
   "dependencies": {
-    "tileserver-gl-light": "${TILESERVER_GL_LIGHT_VERSION}"
+    "tileserver-gl-light": "${TILESERVER_GL_LIGHT_VERSION}",
+    "protomaps-themes-base": "${PROTOMAPS_THEMES_BASE_VERSION}"
   }
 }
 EOF
-  fi
   # --no-fund / --no-audit silence interactive output; --omit=dev
   # avoids pulling test deps. npm respects an existing package-lock
   # if present, so re-runs are deterministic.
@@ -158,48 +168,38 @@ install_maplibre_client() {
   install -m 0644 "$css"                         "${client_dst}/maplibre-gl.css"
 }
 
-install_osm_bright_style() {
-  log "installing osm-bright style @${OSM_BRIGHT_VERSION}"
-  local tarball="${CACHE_DIR}/osm-bright-${OSM_BRIGHT_VERSION}.tar.gz"
-  local extract_dir="${CACHE_DIR}/osm-bright-${OSM_BRIGHT_VERSION}"
-  fetch_to_cache \
-    "https://github.com/openmaptiles/osm-bright-gl-style/archive/refs/tags/${OSM_BRIGHT_VERSION}.tar.gz" \
-    "$tarball"
-  rm -rf "$extract_dir"
-  install -d -m 0755 "$extract_dir"
-  tar -xzf "$tarball" -C "$extract_dir" --strip-components=1
+install_protomaps_style() {
+  log "generating protomaps style template + fetching sprite atlas"
+  install -d -m 0755 "${CONF_DIR}/styles/protomaps"
+  install -d -m 0755 "${CONF_DIR}/sprites"
 
-  # The release ships style.json (single-source openmaptiles) and SVG
-  # icon sources. We ship style.json verbatim as the *template* — the
-  # reindex script transforms it into our composite style at runtime.
-  install -m 0644 "${extract_dir}/style.json" "${CONF_DIR}/styles/osm-bright/style.template.json"
+  # Render the style.template.json from protomaps-themes-base. The
+  # resulting template uses a single placeholder source named "protomaps"
+  # plus all the basemap layers (light theme). The reindex script's
+  # composite builder later rewrites sources/layers per installed region.
+  install -m 0755 "${SRC_DIR}/build-protomaps-style.js" "${DST_DIR}/build-protomaps-style.js"
+  node "${DST_DIR}/build-protomaps-style.js" \
+       > "${CONF_DIR}/styles/protomaps/style.template.json"
 
-  # Sprites: starting with osm-bright v1.x the GitHub release no
-  # longer ships pre-built sprite atlases (only SVG sources under
-  # icons/). Pre-built sprites are published to GitHub Pages instead;
-  # we fetch them at install time. This avoids carrying spreet or any
-  # other sprite-builder dependency, and keeps the install offline-
-  # capable on re-runs once the cache is warm.
-  #
-  # Layout: tileserver-gl-light v5 resolves sprite=<id> in style.json
-  # to <paths.sprites>/<id>.json on disk (NOT a subdir). So we drop
-  # the four atlases at sprites/osm-bright.{json,png} and
-  # sprites/osm-bright@2x.{json,png}.
-  local sprites_dst="${CONF_DIR}/sprites"
-  install -d -m 0755 "$sprites_dst"
-  # rm -rf so we can replace either a stale subdir (older layout) or
-  # stale top-level atlas files when bumping OSM_BRIGHT_VERSION.
-  rm -rf "${sprites_dst}/osm-bright" "${sprites_dst}/osm-bright."* "${sprites_dst}/osm-bright@"*
+  # Sprite atlas. Protomaps publishes pre-built sprites for each theme
+  # at protomaps.github.io/basemaps-assets/sprites/<v>/. Same layout as
+  # OSM-Bright's GitHub Pages publish; we fetch the four files we need.
+  rm -rf "${CONF_DIR}/sprites/protomaps" "${CONF_DIR}/sprites/protomaps."* "${CONF_DIR}/sprites/protomaps@"*
   local f local_name
-  for f in sprite.png sprite.json sprite@2x.png sprite@2x.json; do
+  for f in light.png light.json light@2x.png light@2x.json; do
     fetch_to_cache \
-      "https://openmaptiles.github.io/osm-bright-gl-style/${f}" \
-      "${CACHE_DIR}/osm-bright-sprite-${OSM_BRIGHT_VERSION}-${f//[@\/]/_}"
-    # Rename: sprite.json → osm-bright.json, sprite@2x.png → osm-bright@2x.png, etc.
-    local_name="osm-bright${f#sprite}"
-    install -m 0644 "${CACHE_DIR}/osm-bright-sprite-${OSM_BRIGHT_VERSION}-${f//[@\/]/_}" \
-                    "${sprites_dst}/${local_name}"
+      "https://protomaps.github.io/basemaps-assets/sprites/${PROTOMAPS_SPRITE_VERSION}/${f}" \
+      "${CACHE_DIR}/protomaps-sprite-${PROTOMAPS_SPRITE_VERSION}-${f//[@\/]/_}"
+    # Rename: light.json → protomaps.json, light@2x.png → protomaps@2x.png, etc.
+    local_name="protomaps${f#light}"
+    install -m 0644 "${CACHE_DIR}/protomaps-sprite-${PROTOMAPS_SPRITE_VERSION}-${f//[@\/]/_}" \
+                    "${CONF_DIR}/sprites/${local_name}"
   done
+
+  # Drop the old osm-bright assets if present from a prior install.
+  rm -rf "${CONF_DIR}/styles/osm-bright" \
+         "${CONF_DIR}/sprites/osm-bright" \
+         "${CONF_DIR}/sprites/osm-bright."* "${CONF_DIR}/sprites/osm-bright@"*
 }
 
 install_glyph_fonts() {
@@ -234,11 +234,37 @@ install_glyph_fonts() {
       done
 }
 
+install_pmtiles_binary() {
+  log "installing go-pmtiles@${GO_PMTILES_VERSION} (used by E3-S2 region downloader)"
+  # Pi 4B / Pi 5 are aarch64. The host arch detection is intentionally
+  # narrow — we only ship official Pi targets. arm32 / x86_64 dev
+  # machines aren't supported.
+  local arch
+  arch=$(uname -m)
+  if [[ "$arch" != "aarch64" && "$arch" != "arm64" ]]; then
+    warn "unsupported host arch ${arch}; pmtiles binary will not be installed"
+    return 0
+  fi
+
+  local tarball="${CACHE_DIR}/go-pmtiles-${GO_PMTILES_VERSION}.tar.gz"
+  fetch_to_cache \
+    "https://github.com/protomaps/go-pmtiles/releases/download/v${GO_PMTILES_VERSION}/go-pmtiles_${GO_PMTILES_VERSION}_Linux_arm64.tar.gz" \
+    "$tarball"
+
+  install -d -m 0755 "${DST_DIR}/bin"
+  # The tarball contains the `pmtiles` binary at the top level. We
+  # extract just that entry to keep the deploy tree tidy.
+  tar -xzf "$tarball" -C "${DST_DIR}/bin" pmtiles
+  chmod 0755 "${DST_DIR}/bin/pmtiles"
+}
+
 install_scripts_and_units() {
-  log "installing reindex scripts and systemd units"
-  install -m 0755 "${SRC_DIR}/build-tiles-index.sh" "${DST_DIR}/build-tiles-index.sh"
-  install -m 0755 "${SRC_DIR}/build-tiles-index.py" "${DST_DIR}/build-tiles-index.py"
-  install -m 0644 "${SRC_DIR}/tiles_indexer.py"     "${DST_DIR}/tiles_indexer.py"
+  log "installing reindex + worker scripts and systemd units"
+  install -m 0755 "${SRC_DIR}/build-tiles-index.sh"   "${DST_DIR}/build-tiles-index.sh"
+  install -m 0755 "${SRC_DIR}/build-tiles-index.py"   "${DST_DIR}/build-tiles-index.py"
+  install -m 0644 "${SRC_DIR}/tiles_indexer.py"       "${DST_DIR}/tiles_indexer.py"
+  install -m 0755 "${SRC_DIR}/extract-region.sh"      "${DST_DIR}/extract-region.sh"
+  install -m 0644 "${SRC_DIR}/regions.json"           "${DST_DIR}/regions.json"
 
   install -m 0644 "${SRC_DIR}/prepperpi-tiles.service"           /etc/systemd/system/prepperpi-tiles.service
   install -m 0644 "${SRC_DIR}/prepperpi-tiles-reindex.service"   /etc/systemd/system/prepperpi-tiles-reindex.service
@@ -270,8 +296,9 @@ main() {
   symlink_mbtiles
   install_tileserver_gl_light
   install_maplibre_client
-  install_osm_bright_style
+  install_protomaps_style
   install_glyph_fonts
+  install_pmtiles_binary
   install_scripts_and_units
   initial_index
   enable_units
