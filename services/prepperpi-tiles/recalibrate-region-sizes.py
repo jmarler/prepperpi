@@ -1,26 +1,72 @@
 #!/usr/bin/env python3
 """recalibrate-region-sizes.py — refresh estimated_bytes in regions.json.
 
-Maintainer-side helper. NOT run at install time. Re-runs every catalog
-country at --maxzoom=8 against the live Protomaps planet, captures the
-"archive size of N MB" line from pmtiles' own output, then extrapolates
-to a z0-15 estimate via a calibration ratio derived from known anchors.
+Maintainer-side helper. NOT run at install time. Drives `pmtiles
+extract` against every country in the catalog and reads the
+"archive size of N B" line from the tool's stderr to update
+estimated_bytes. Designed to run either on a developer's machine or
+on a CI runner with enough bandwidth + disk.
 
-Why z0-8 and not full? A full z0-15 pass for 195 countries pushes
-~40 GB through Protomaps' free CDN. z0-8 is roughly 1-2 GB total —
-cheap enough to be polite, dense enough that the directory walk
-drives a meaningful fraction of the total bytes.
+Two modes:
 
-Anchors are measured separately (currently inline below; bump as we
-collect more data points). The geometric mean ratio across anchors
-becomes the scale factor applied to every country's z0-8 size.
+  * Full pass (default; no --maxzoom): extracts each country at its
+    full z0-15 zoom range. Captured size IS the new estimate. ~50-150 GB
+    of total transfer for the whole catalog; ~30-90 min wall time on a
+    decent connection at concurrency=4.
 
-Usage:
-    python3 recalibrate-region-sizes.py \\
-        --catalog services/prepperpi-tiles/regions.json \\
-        --pmtiles-bin /opt/prepperpi/services/prepperpi-tiles/bin/pmtiles \\
-        --concurrency 4 \\
-        [--source-url https://build.protomaps.com/<DATE>.pmtiles]   # auto-discovered if omitted
+  * Sample pass (--maxzoom=N): caps the extract zoom for a faster,
+    cheaper sweep. The captured size is a fraction of the real z0-15
+    size; the script geometric-means the z15:zN ratio across known
+    anchor countries (ANCHORS_Z15 below) and applies it to scale up.
+    Useful for sanity checks but inferior to the full pass.
+
+Resume + audit
+==============
+
+The measurements sidecar (--measurements, default
+`<catalog-dir>/measurements.json`) is BOTH the resume input and the
+durable audit log:
+
+  {
+    "schema_version": 1,
+    "planet_source_url": "...",
+    "started_at": "...",
+    "completed_at": null,
+    "by_region_id": {
+      "VA": {"extracted_bytes": 2441541,
+             "transferred_bytes": 2500000,
+             "duration_seconds": 3.2,
+             "extracted_at": "..."},
+      ...
+    },
+    "failures": [{"region_id": "PT", "error": "...", "attempted_at": "..."}]
+  }
+
+A re-run reads any existing measurements file and SKIPS already-measured
+countries (use --refresh to force re-measurement). Failures are
+re-attempted unless --skip-failed is passed.
+
+CI-friendly output
+==================
+
+  --json-progress   emit one JSON line per country to stdout (separate
+                    from the human-readable progress on stderr) so a
+                    workflow can parse the live state. Lines look like
+                    `{"event": "extracted", "region_id": "VA", "bytes": 2441541}`.
+
+Usage
+=====
+
+  # full pass on a developer Mac, defaults baked in
+  python3 services/prepperpi-tiles/recalibrate-region-sizes.py
+
+  # CI-style invocation; explicit paths, structured progress
+  python3 services/prepperpi-tiles/recalibrate-region-sizes.py \\
+    --catalog services/prepperpi-tiles/regions.json \\
+    --measurements services/prepperpi-tiles/recalibration.json \\
+    --temp-dir /var/tmp/pmtiles-recalibrate \\
+    --concurrency 6 \\
+    --json-progress
 """
 from __future__ import annotations
 
@@ -28,18 +74,23 @@ import argparse
 import concurrent.futures as cf
 import datetime as dt
 import json
+import math
 import os
 import re
+import shutil
 import statistics
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
+from typing import Optional
+
 
 # Anchor measurements: full z0-15 archive size (in bytes) for countries
-# we've extracted end-to-end. These are the source of truth for the
-# z0-15:z0-8 scaling ratio. Add more rows as you do real installs.
+# we've extracted end-to-end, kept for the --maxzoom sampling mode's
+# extrapolation. The full pass doesn't need them.
 ANCHORS_Z15: dict[str, int] = {
     "VA": 2_441_541,
     "LI": 10_003_928,
@@ -49,37 +100,62 @@ ANCHORS_Z15: dict[str, int] = {
 
 # Output line we parse from pmtiles stdout/stderr:
 #   "Extract transferred 10 MB (overfetch 0.05) for an archive size of 10 MB"
-# The unit can be B / kB / MB / GB.
 ARCHIVE_RE = re.compile(
-    r"archive size of\s+([\d.]+)\s*([kMGT]?B)\s*$",
-    re.MULTILINE,
+    r"Extract transferred\s+([\d.]+)\s*([kMGT]?B)[^\n]*archive size of\s+([\d.]+)\s*([kMGT]?B)",
 )
 UNIT = {"B": 1, "kB": 1000, "MB": 1000 ** 2, "GB": 1000 ** 3, "TB": 1000 ** 4}
 
 
+# ---------- argument parsing ----------
+
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--catalog", required=True, type=Path)
-    p.add_argument("--pmtiles-bin", required=True, type=Path)
-    p.add_argument("--concurrency", type=int, default=4)
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    p.add_argument("--catalog", type=Path,
+                   default=Path(__file__).resolve().parent / "regions.json")
+    p.add_argument("--pmtiles-bin", default="pmtiles",
+                   help="Path to the pmtiles executable. Defaults to $PATH lookup.")
     p.add_argument("--source-url", default=None,
-                   help="Planet PMTiles source. Defaults to walking back from "
-                        "today's date until a 200 is found.")
-    p.add_argument("--maxzoom", type=int, default=8,
-                   help="Cap extract zoom for the sampling pass. Default 8 "
-                        "keeps each sample to a few MB.")
-    p.add_argument("--out", type=Path, default=None,
-                   help="Where to write the updated catalog. Defaults to "
-                        "overwriting --catalog in place.")
+                   help="Planet PMTiles source. Default: walk back from today's "
+                        "date through Protomaps build/ until a 200 is found.")
+    p.add_argument("--concurrency", type=int, default=4)
+    p.add_argument("--maxzoom", type=int, default=None,
+                   help="Cap extract zoom for the sampling mode. Omit for full pass.")
+    p.add_argument("--countries", default=None,
+                   help="Comma-separated ISO codes to limit the run to. Default: all.")
+    p.add_argument("--measurements", type=Path, default=None,
+                   help="Path to the measurements sidecar (resume + audit). "
+                        "Default: <catalog-dir>/measurements.json.")
+    p.add_argument("--temp-dir", type=Path, default=None,
+                   help="Where to write .pmtiles extracts during measurement. "
+                        "Default: a tmpdir that's removed on exit.")
+    p.add_argument("--keep-extracts", action="store_true",
+                   help="Keep the per-country .pmtiles files after measuring "
+                        "(useful for reusing as test fixtures).")
+    p.add_argument("--refresh", action="store_true",
+                   help="Re-measure even countries already in the measurements file.")
+    p.add_argument("--skip-failed", action="store_true",
+                   help="Don't retry countries previously recorded as failed.")
+    p.add_argument("--retries", type=int, default=2,
+                   help="Per-country retry attempts on transient failure.")
+    p.add_argument("--json-progress", action="store_true",
+                   help="Emit one JSON line per country to stdout, in addition "
+                        "to the human-readable progress on stderr.")
+    p.add_argument("--output-catalog", type=Path, default=None,
+                   help="Where to write the updated catalog. Default: in-place "
+                        "overwrite of --catalog.")
     return p.parse_args()
 
+
+# ---------- planet URL discovery ----------
 
 def discover_source_url() -> str:
     """Walk back from today (UTC) up to 14 days until a 200 is found.
 
     Protomaps' CDN 403s plain HEADs without a User-Agent, so we send a
-    Range-limited GET and read just the first byte instead. Same shape
-    as the curl-based check inside extract-region.sh.
+    range-limited GET and read the first byte instead.
     """
     today = dt.datetime.now(dt.timezone.utc).date()
     for offset in range(15):
@@ -98,128 +174,297 @@ def discover_source_url() -> str:
     raise RuntimeError("no recent Protomaps planet PMTiles found")
 
 
-def parse_archive_size(stderr: str) -> int | None:
-    m = ARCHIVE_RE.search(stderr)
+# ---------- pmtiles invocation + parsing ----------
+
+def parse_archive_size(stream: str) -> tuple[Optional[int], Optional[int]]:
+    """Pull (transferred_bytes, archive_bytes) out of pmtiles' summary line.
+
+    Returns (None, None) if the regex doesn't match.
+    """
+    m = ARCHIVE_RE.search(stream)
     if not m:
-        return None
-    return int(round(float(m.group(1)) * UNIT.get(m.group(2), 1)))
+        return None, None
+    transferred = int(round(float(m.group(1)) * UNIT.get(m.group(2), 1)))
+    archive     = int(round(float(m.group(3)) * UNIT.get(m.group(4), 1)))
+    return transferred, archive
 
 
-def sample_country(country: dict, *, source_url: str, pmtiles_bin: Path,
-                   maxzoom: int) -> tuple[str, int | None]:
-    """Run pmtiles extract --maxzoom=N for one country, return its z0-N size."""
+def extract_one(country: dict, *, source_url: str, pmtiles_bin: str,
+                temp_dir: Path, maxzoom: Optional[int], keep: bool,
+                retries: int) -> dict:
+    """Run pmtiles extract for one country. Returns a measurement dict
+    on success or a {"error": ...} dict on failure.
+    """
     rid = country["id"]
     bbox = ",".join(str(b) for b in country["bbox"])
-    with tempfile.NamedTemporaryFile(suffix=".pmtiles", delete=False) as tmp:
-        tmp_path = tmp.name
-    try:
-        proc = subprocess.run(
-            [str(pmtiles_bin), "extract", source_url, tmp_path,
-             "--bbox", bbox, "--maxzoom", str(maxzoom)],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-    finally:
-        try: os.unlink(tmp_path)
-        except OSError: pass
-    if proc.returncode != 0:
-        return rid, None
-    size = parse_archive_size(proc.stderr) or parse_archive_size(proc.stdout)
-    return rid, size
+    out_path = temp_dir / f"{rid}.pmtiles"
+    # pmtiles' kong-based flag parser treats a leading-negative value
+    # ("-5.5,...") as a NEW flag rather than the previous flag's value.
+    # Pass the bbox attached with `=` so it's a single token. Same
+    # quirk catches --maxzoom only when its value is negative, which
+    # never happens — but the joined form is harmless either way.
+    cmd = [pmtiles_bin, "extract", source_url, str(out_path), f"--bbox={bbox}"]
+    if maxzoom is not None:
+        cmd.append(f"--maxzoom={maxzoom}")
+
+    last_err = ""
+    for attempt in range(1, retries + 2):
+        # Always start from a clean output path so a partially-extracted
+        # file from a prior failed attempt doesn't poison the next try.
+        try: out_path.unlink()
+        except FileNotFoundError: pass
+
+        started = time.monotonic()
+        try:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=3600,  # 1h per country; US takes ~10 min on a fast pipe
+            )
+        except subprocess.TimeoutExpired as exc:
+            last_err = f"timeout after {exc.timeout}s"
+            continue
+
+        duration = time.monotonic() - started
+
+        if proc.returncode != 0:
+            last_err = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:] or [f"rc={proc.returncode}"]
+            last_err = last_err[0] if last_err else f"rc={proc.returncode}"
+            continue
+
+        transferred, archive = parse_archive_size(proc.stderr or proc.stdout)
+        if archive is None:
+            # Tool succeeded but we couldn't parse the size — fall back
+            # to the file size we just wrote.
+            try:
+                archive = out_path.stat().st_size
+            except OSError:
+                archive = None
+
+        if not keep:
+            try: out_path.unlink()
+            except FileNotFoundError: pass
+
+        return {
+            "extracted_bytes":   archive,
+            "transferred_bytes": transferred,
+            "duration_seconds":  round(duration, 1),
+            "extracted_at":      dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            "attempts":          attempt,
+        }
+
+    return {"error": last_err}
 
 
-def compute_scale_ratio(z8_sizes: dict[str, int]) -> float:
-    """Geometric mean of z15:z8 ratios for known anchors.
+# ---------- measurements sidecar ----------
 
-    Geometric (not arithmetic) mean because the ratio varies log-scaled
-    across country sizes. Falls back to 50.0 if no anchors landed in
-    the sampled set (shouldn't happen unless our small anchors were
-    skipped or failed).
-    """
-    ratios: list[float] = []
+def load_measurements(path: Path, source_url: str) -> dict:
+    if not path.exists():
+        return {
+            "schema_version": 1,
+            "planet_source_url": source_url,
+            "started_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+            "completed_at": None,
+            "by_region_id": {},
+            "failures": [],
+        }
+    data = json.loads(path.read_text())
+    if data.get("schema_version") != 1:
+        raise SystemExit(f"unknown measurements schema_version: {data.get('schema_version')}")
+    return data
+
+
+def save_measurements(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".new")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    tmp.replace(path)
+
+
+# ---------- catalog update ----------
+
+def compute_scale_ratio(z_sizes: dict[str, int]) -> float:
+    """Geometric mean of z15:znN ratios for known anchors. Used only by
+    sample mode (--maxzoom)."""
+    ratios = []
     for rid, z15 in ANCHORS_Z15.items():
-        z8 = z8_sizes.get(rid)
-        if z8 and z8 > 0:
-            ratios.append(z15 / z8)
-            print(f"  anchor {rid}: z8={z8/1e6:.1f} MB, z15={z15/1e6:.0f} MB, "
-                  f"ratio={z15/z8:.1f}x", file=sys.stderr)
+        zn = z_sizes.get(rid)
+        if zn and zn > 0:
+            ratios.append(z15 / zn)
+            print(f"  anchor {rid}: zN={zn / 1e6:.1f} MB, z15={z15 / 1e6:.0f} MB, "
+                  f"ratio={z15 / zn:.1f}x", file=sys.stderr)
     if not ratios:
         print("  WARN: no anchor matched; defaulting to 50x", file=sys.stderr)
         return 50.0
-    log_mean = statistics.mean([statistics.log(r) for r in ratios] if False
-                                else [__import__("math").log(r) for r in ratios])
-    import math
-    return math.exp(log_mean)
+    return math.exp(statistics.mean([math.log(r) for r in ratios]))
 
+
+def round_estimate(b: int) -> int:
+    """Round each estimate to a clean unit so the catalog reads tidily."""
+    if b >= 5_000_000_000:
+        return ((b + 999_999_999) // 1_000_000_000) * 1_000_000_000
+    if b >= 500_000_000:
+        return ((b + 99_999_999) // 100_000_000) * 100_000_000
+    if b >= 50_000_000:
+        return ((b + 9_999_999) // 10_000_000) * 10_000_000
+    if b >= 5_000_000:
+        return ((b + 999_999) // 1_000_000) * 1_000_000
+    return max(b, 1_000_000)
+
+
+def update_catalog(catalog: dict, measurements: dict, *,
+                   sample_ratio: Optional[float]) -> int:
+    """Write `estimated_bytes` for every country we have a measurement for.
+
+    Returns the count of countries whose estimate changed.
+    """
+    by_region = measurements["by_region_id"]
+    changed = 0
+    for c in catalog["countries"]:
+        rid = c["id"]
+        m = by_region.get(rid)
+        if not m or m.get("extracted_bytes") is None:
+            continue
+        if sample_ratio is None:
+            new = round_estimate(m["extracted_bytes"])
+        else:
+            new = round_estimate(int(m["extracted_bytes"] * sample_ratio))
+        if new != c.get("estimated_bytes"):
+            changed += 1
+            c["estimated_bytes"] = new
+    return changed
+
+
+# ---------- main loop ----------
 
 def main() -> int:
     args = parse_args()
-    catalog = json.loads(args.catalog.read_text(encoding="utf-8"))
-    countries = catalog.get("countries", [])
+    catalog_path: Path = args.catalog
+    measurements_path: Path = args.measurements or (catalog_path.parent / "measurements.json")
+    output_path: Path = args.output_catalog or catalog_path
+
+    catalog = json.loads(catalog_path.read_text())
+    countries = catalog["countries"]
+    if args.countries:
+        wanted = {c.strip() for c in args.countries.split(",") if c.strip()}
+        countries = [c for c in countries if c["id"] in wanted]
+        if not countries:
+            raise SystemExit(f"no catalog entries match --countries={args.countries}")
 
     src = args.source_url or discover_source_url()
-    print(f"source: {src}", file=sys.stderr)
-    print(f"sampling {len(countries)} countries at z0-{args.maxzoom} "
-          f"with concurrency={args.concurrency}", file=sys.stderr)
+    measurements = load_measurements(measurements_path, src)
 
-    z8_sizes: dict[str, int | None] = {}
-    started = 0
-    with cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
-        futures = {
-            ex.submit(sample_country, c,
-                      source_url=src,
-                      pmtiles_bin=args.pmtiles_bin,
-                      maxzoom=args.maxzoom): c["id"]
-            for c in countries
-        }
-        for fut in cf.as_completed(futures):
-            rid, size = fut.result()
-            z8_sizes[rid] = size
-            started += 1
-            if size is None:
-                print(f"  [{started:>3}/{len(countries)}] {rid:<4} FAILED",
-                      file=sys.stderr)
-            else:
-                print(f"  [{started:>3}/{len(countries)}] {rid:<4} z8={size/1e6:.1f} MB",
-                      file=sys.stderr)
+    # If the source URL changed since the last run, the prior measurements
+    # are still valid (the planet is daily, but country geographies don't
+    # move). We just record the new URL on this run.
+    measurements["planet_source_url"] = src
+    measurements["started_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
-    ratio = compute_scale_ratio({k: v for k, v in z8_sizes.items() if v})
-    print(f"\nz15:z8 scale ratio (geomean across anchors): {ratio:.1f}x",
-          file=sys.stderr)
-
-    # Apply ratio. Round up to next 100 MB / 1 GB for tidiness, AND
-    # to bias estimates toward overestimation (better UX than
-    # under-estimating and failing mid-extract).
-    def round_up(b: int) -> int:
-        if b >= 5_000_000_000:
-            return ((b + 999_999_999) // 1_000_000_000) * 1_000_000_000
-        if b >= 500_000_000:
-            return ((b + 99_999_999) // 100_000_000) * 100_000_000
-        if b >= 50_000_000:
-            return ((b + 9_999_999) // 10_000_000) * 10_000_000
-        if b >= 5_000_000:
-            return ((b + 999_999) // 1_000_000) * 1_000_000
-        return max(b, 1_000_000)
-
-    refreshed = 0
+    # Decide which countries actually need work.
+    by_region = measurements["by_region_id"]
+    failed_ids = {f["region_id"] for f in measurements.get("failures", [])}
+    todo = []
     for c in countries:
         rid = c["id"]
-        if rid in ANCHORS_Z15:
-            new = ANCHORS_Z15[rid]                          # exact measurement
-        else:
-            z8 = z8_sizes.get(rid)
-            if z8 is None:
-                continue                                     # leave existing estimate
-            new = round_up(int(z8 * ratio))
-        if new != c.get("estimated_bytes"):
-            refreshed += 1
-            c["estimated_bytes"] = new
+        if not args.refresh and by_region.get(rid, {}).get("extracted_bytes") is not None:
+            continue
+        if args.skip_failed and rid in failed_ids:
+            continue
+        todo.append(c)
 
-    out = args.out or args.catalog
-    out.write_text(json.dumps(catalog, indent=2) + "\n", encoding="utf-8")
-    print(f"\nwrote {out} ({refreshed} estimates updated)", file=sys.stderr)
-    return 0
+    print(f"source: {src}", file=sys.stderr)
+    print(f"catalog: {catalog_path}", file=sys.stderr)
+    print(f"measurements: {measurements_path}", file=sys.stderr)
+    print(f"to do: {len(todo)} of {len(countries)} countries "
+          f"(skipped {len(countries) - len(todo)} already measured)",
+          file=sys.stderr)
+    print(f"concurrency: {args.concurrency}", file=sys.stderr)
+    print(f"maxzoom: {args.maxzoom if args.maxzoom is not None else 'full'}",
+          file=sys.stderr)
+
+    if not todo:
+        print("nothing to do", file=sys.stderr)
+        return 0
+
+    # Temp dir for the .pmtiles extracts.
+    own_temp = args.temp_dir is None
+    temp_dir = args.temp_dir or Path(tempfile.mkdtemp(prefix="pmtiles-recalibrate-"))
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    print(f"temp dir: {temp_dir} (will be removed at exit: {own_temp})",
+          file=sys.stderr)
+
+    failures: list[dict] = list(measurements.get("failures", []))
+    failures = [f for f in failures if f["region_id"] not in {c["id"] for c in todo}]
+
+    try:
+        with cf.ThreadPoolExecutor(max_workers=args.concurrency) as ex:
+            futures = {
+                ex.submit(extract_one, c,
+                          source_url=src,
+                          pmtiles_bin=args.pmtiles_bin,
+                          temp_dir=temp_dir,
+                          maxzoom=args.maxzoom,
+                          keep=args.keep_extracts,
+                          retries=args.retries): c
+                for c in todo
+            }
+            done = 0
+            for fut in cf.as_completed(futures):
+                c = futures[fut]
+                rid = c["id"]
+                done += 1
+                result = fut.result()
+                if "error" in result:
+                    failures.append({
+                        "region_id":  rid,
+                        "error":      result["error"],
+                        "attempted_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                    })
+                    print(f"  [{done:>3}/{len(todo)}] {rid:<4} FAILED: {result['error']}",
+                          file=sys.stderr)
+                    if args.json_progress:
+                        print(json.dumps({"event": "failed", "region_id": rid,
+                                          "error": result["error"]}), flush=True)
+                else:
+                    by_region[rid] = result
+                    eb = result["extracted_bytes"]
+                    print(f"  [{done:>3}/{len(todo)}] {rid:<4} {eb / 1e6:>9.1f} MB "
+                          f"in {result['duration_seconds']:>6.1f}s "
+                          f"(attempts={result['attempts']})",
+                          file=sys.stderr)
+                    if args.json_progress:
+                        print(json.dumps({"event": "extracted", "region_id": rid,
+                                          "bytes": eb}), flush=True)
+                # Save after every country so an interrupted run can resume cleanly.
+                measurements["failures"] = failures
+                save_measurements(measurements_path, measurements)
+    finally:
+        if own_temp:
+            try: shutil.rmtree(temp_dir)
+            except Exception as exc:
+                print(f"WARN: failed to clean tempdir {temp_dir}: {exc}",
+                      file=sys.stderr)
+
+    measurements["completed_at"] = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    measurements["failures"] = failures
+    save_measurements(measurements_path, measurements)
+
+    # Compute the scaling ratio (only used in --maxzoom mode) and update
+    # the catalog from the measurements.
+    sample_ratio = None
+    if args.maxzoom is not None:
+        sample_ratio = compute_scale_ratio({
+            rid: m.get("extracted_bytes") for rid, m in by_region.items()
+        })
+        print(f"\nz15:z{args.maxzoom} scale ratio (geomean): {sample_ratio:.1f}x",
+              file=sys.stderr)
+
+    changed = update_catalog(catalog, measurements, sample_ratio=sample_ratio)
+    output_path.write_text(json.dumps(catalog, indent=2) + "\n")
+    print(f"\nwrote {output_path} ({changed} estimates updated)", file=sys.stderr)
+    print(f"failures: {len(failures)}", file=sys.stderr)
+    return 0 if not failures else 1
 
 
 if __name__ == "__main__":

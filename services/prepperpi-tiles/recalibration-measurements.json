@@ -1,0 +1,1374 @@
+{
+  "schema_version": 1,
+  "planet_source_url": "https://build.protomaps.com/20260425.pmtiles",
+  "started_at": "2026-04-26T02:06:31+00:00",
+  "completed_at": "2026-04-26T02:06:33+00:00",
+  "by_region_id": {
+    "CY": {
+      "extracted_bytes": 54000000,
+      "transferred_bytes": 56000000,
+      "duration_seconds": 2.9,
+      "extracted_at": "2026-04-26T01:46:25+00:00",
+      "attempts": 1
+    },
+    "BG": {
+      "extracted_bytes": 439000000,
+      "transferred_bytes": 461000000,
+      "duration_seconds": 11.7,
+      "extracted_at": "2026-04-26T01:46:34+00:00",
+      "attempts": 1
+    },
+    "EE": {
+      "extracted_bytes": 253000000,
+      "transferred_bytes": 265000000,
+      "duration_seconds": 10.5,
+      "extracted_at": "2026-04-26T01:46:44+00:00",
+      "attempts": 1
+    },
+    "BE": {
+      "extracted_bytes": 1200000000,
+      "transferred_bytes": 1300000000,
+      "duration_seconds": 27.5,
+      "extracted_at": "2026-04-26T01:46:50+00:00",
+      "attempts": 1
+    },
+    "HR": {
+      "extracted_bytes": 1200000000,
+      "transferred_bytes": 1200000000,
+      "duration_seconds": 36.2,
+      "extracted_at": "2026-04-26T01:46:58+00:00",
+      "attempts": 1
+    },
+    "CZ": {
+      "extracted_bytes": 1800000000,
+      "transferred_bytes": 1900000000,
+      "duration_seconds": 38.7,
+      "extracted_at": "2026-04-26T01:47:01+00:00",
+      "attempts": 1
+    },
+    "AT": {
+      "extracted_bytes": 2000000000,
+      "transferred_bytes": 2100000000,
+      "duration_seconds": 39.9,
+      "extracted_at": "2026-04-26T01:47:02+00:00",
+      "attempts": 1
+    },
+    "DK": {
+      "extracted_bytes": 911000000,
+      "transferred_bytes": 956000000,
+      "duration_seconds": 39.9,
+      "extracted_at": "2026-04-26T01:47:05+00:00",
+      "attempts": 1
+    },
+    "GR": {
+      "extracted_bytes": 781000000,
+      "transferred_bytes": 820000000,
+      "duration_seconds": 23.0,
+      "extracted_at": "2026-04-26T01:47:21+00:00",
+      "attempts": 1
+    },
+    "LV": {
+      "extracted_bytes": 457000000,
+      "transferred_bytes": 480000000,
+      "duration_seconds": 18.2,
+      "extracted_at": "2026-04-26T01:47:23+00:00",
+      "attempts": 1
+    },
+    "HU": {
+      "extracted_bytes": 942000000,
+      "transferred_bytes": 989000000,
+      "duration_seconds": 28.1,
+      "extracted_at": "2026-04-26T01:47:29+00:00",
+      "attempts": 1
+    },
+    "LU": {
+      "extracted_bytes": 101000000,
+      "transferred_bytes": 106000000,
+      "duration_seconds": 5.9,
+      "extracted_at": "2026-04-26T01:47:29+00:00",
+      "attempts": 1
+    },
+    "MT": {
+      "extracted_bytes": 8100000,
+      "transferred_bytes": 8300000,
+      "duration_seconds": 2.9,
+      "extracted_at": "2026-04-26T01:47:32+00:00",
+      "attempts": 1
+    },
+    "LT": {
+      "extracted_bytes": 606000000,
+      "transferred_bytes": 636000000,
+      "duration_seconds": 22.7,
+      "extracted_at": "2026-04-26T01:47:44+00:00",
+      "attempts": 1
+    },
+    "FI": {
+      "extracted_bytes": 2400000000,
+      "transferred_bytes": 2500000000,
+      "duration_seconds": 63.2,
+      "extracted_at": "2026-04-26T01:47:48+00:00",
+      "attempts": 1
+    },
+    "SV": {
+      "extracted_bytes": 63000000,
+      "transferred_bytes": 66000000,
+      "duration_seconds": 3.2,
+      "extracted_at": "2026-04-26T01:50:09+00:00",
+      "attempts": 1
+    },
+    "BZ": {
+      "extracted_bytes": 57000000,
+      "transferred_bytes": 60000000,
+      "duration_seconds": 3.5,
+      "extracted_at": "2026-04-26T01:50:09+00:00",
+      "attempts": 1
+    },
+    "GT": {
+      "extracted_bytes": 250000000,
+      "transferred_bytes": 263000000,
+      "duration_seconds": 6.8,
+      "extracted_at": "2026-04-26T01:50:12+00:00",
+      "attempts": 1
+    },
+    "HN": {
+      "extracted_bytes": 210000000,
+      "transferred_bytes": 220000000,
+      "duration_seconds": 3.7,
+      "extracted_at": "2026-04-26T01:50:12+00:00",
+      "attempts": 1
+    },
+    "CR": {
+      "extracted_bytes": 89000000,
+      "transferred_bytes": 93000000,
+      "duration_seconds": 3.3,
+      "extracted_at": "2026-04-26T01:50:15+00:00",
+      "attempts": 1
+    },
+    "NI": {
+      "extracted_bytes": 168000000,
+      "transferred_bytes": 177000000,
+      "duration_seconds": 7.1,
+      "extracted_at": "2026-04-26T01:50:16+00:00",
+      "attempts": 1
+    },
+    "PA": {
+      "extracted_bytes": 75000000,
+      "transferred_bytes": 79000000,
+      "duration_seconds": 3.7,
+      "extracted_at": "2026-04-26T01:50:16+00:00",
+      "attempts": 1
+    },
+    "JM": {
+      "extracted_bytes": 40000000,
+      "transferred_bytes": 41000000,
+      "duration_seconds": 2.0,
+      "extracted_at": "2026-04-26T01:50:18+00:00",
+      "attempts": 1
+    },
+    "HT": {
+      "extracted_bytes": 63000000,
+      "transferred_bytes": 66000000,
+      "duration_seconds": 2.9,
+      "extracted_at": "2026-04-26T01:50:19+00:00",
+      "attempts": 1
+    },
+    "CU": {
+      "extracted_bytes": 133000000,
+      "transferred_bytes": 140000000,
+      "duration_seconds": 3.8,
+      "extracted_at": "2026-04-26T01:50:19+00:00",
+      "attempts": 1
+    },
+    "PR": {
+      "extracted_bytes": 68000000,
+      "transferred_bytes": 70000000,
+      "duration_seconds": 2.4,
+      "extracted_at": "2026-04-26T01:50:21+00:00",
+      "attempts": 1
+    },
+    "DO": {
+      "extracted_bytes": 56000000,
+      "transferred_bytes": 59000000,
+      "duration_seconds": 3.5,
+      "extracted_at": "2026-04-26T01:50:21+00:00",
+      "attempts": 1
+    },
+    "KN": {
+      "extracted_bytes": 2200000,
+      "transferred_bytes": 2300000,
+      "duration_seconds": 1.4,
+      "extracted_at": "2026-04-26T01:50:23+00:00",
+      "attempts": 1
+    },
+    "BB": {
+      "extracted_bytes": 7300000,
+      "transferred_bytes": 7500000,
+      "duration_seconds": 1.9,
+      "extracted_at": "2026-04-26T01:50:23+00:00",
+      "attempts": 1
+    },
+    "BS": {
+      "extracted_bytes": 60000000,
+      "transferred_bytes": 62000000,
+      "duration_seconds": 4.4,
+      "extracted_at": "2026-04-26T01:50:24+00:00",
+      "attempts": 1
+    },
+    "DM": {
+      "extracted_bytes": 3400000,
+      "transferred_bytes": 3500000,
+      "duration_seconds": 1.4,
+      "extracted_at": "2026-04-26T01:50:25+00:00",
+      "attempts": 1
+    },
+    "AG": {
+      "extracted_bytes": 3100000,
+      "transferred_bytes": 3200000,
+      "duration_seconds": 1.9,
+      "extracted_at": "2026-04-26T01:50:25+00:00",
+      "attempts": 1
+    },
+    "LC": {
+      "extracted_bytes": 4500000,
+      "transferred_bytes": 4700000,
+      "duration_seconds": 2.6,
+      "extracted_at": "2026-04-26T01:50:26+00:00",
+      "attempts": 1
+    },
+    "VC": {
+      "extracted_bytes": 3000000,
+      "transferred_bytes": 3100000,
+      "duration_seconds": 1.9,
+      "extracted_at": "2026-04-26T01:50:27+00:00",
+      "attempts": 1
+    },
+    "GD": {
+      "extracted_bytes": 2900000,
+      "transferred_bytes": 3000000,
+      "duration_seconds": 2.3,
+      "extracted_at": "2026-04-26T01:50:27+00:00",
+      "attempts": 1
+    },
+    "TT": {
+      "extracted_bytes": 16000000,
+      "transferred_bytes": 17000000,
+      "duration_seconds": 2.9,
+      "extracted_at": "2026-04-26T01:50:29+00:00",
+      "attempts": 1
+    },
+    "GY": {
+      "extracted_bytes": 69000000,
+      "transferred_bytes": 72000000,
+      "duration_seconds": 5.6,
+      "extracted_at": "2026-04-26T01:50:32+00:00",
+      "attempts": 1
+    },
+    "SR": {
+      "extracted_bytes": 56000000,
+      "transferred_bytes": 58000000,
+      "duration_seconds": 6.0,
+      "extracted_at": "2026-04-26T01:50:33+00:00",
+      "attempts": 1
+    },
+    "MX": {
+      "extracted_bytes": 2600000000,
+      "transferred_bytes": 2700000000,
+      "duration_seconds": 30.3,
+      "extracted_at": "2026-04-26T01:50:36+00:00",
+      "attempts": 1
+    },
+    "UY": {
+      "extracted_bytes": 167000000,
+      "transferred_bytes": 176000000,
+      "duration_seconds": 11.7,
+      "extracted_at": "2026-04-26T01:50:44+00:00",
+      "attempts": 1
+    },
+    "PY": {
+      "extracted_bytes": 341000000,
+      "transferred_bytes": 358000000,
+      "duration_seconds": 12.2,
+      "extracted_at": "2026-04-26T01:50:45+00:00",
+      "attempts": 1
+    },
+    "BO": {
+      "extracted_bytes": 575000000,
+      "transferred_bytes": 604000000,
+      "duration_seconds": 21.2,
+      "extracted_at": "2026-04-26T01:51:05+00:00",
+      "attempts": 1
+    },
+    "PE": {
+      "extracted_bytes": 776000000,
+      "transferred_bytes": 814000000,
+      "duration_seconds": 33.4,
+      "extracted_at": "2026-04-26T01:51:19+00:00",
+      "attempts": 1
+    },
+    "AR": {
+      "extracted_bytes": 2100000000,
+      "transferred_bytes": 2200000000,
+      "duration_seconds": 56.4,
+      "extracted_at": "2026-04-26T01:51:32+00:00",
+      "attempts": 1
+    },
+    "CL": {
+      "extracted_bytes": 1100000000,
+      "transferred_bytes": 1100000000,
+      "duration_seconds": 27.7,
+      "extracted_at": "2026-04-26T01:51:33+00:00",
+      "attempts": 1
+    },
+    "EC": {
+      "extracted_bytes": 243000000,
+      "transferred_bytes": 255000000,
+      "duration_seconds": 27.9,
+      "extracted_at": "2026-04-26T01:51:46+00:00",
+      "attempts": 1
+    },
+    "VE": {
+      "extracted_bytes": 506000000,
+      "transferred_bytes": 531000000,
+      "duration_seconds": 20.7,
+      "extracted_at": "2026-04-26T01:51:53+00:00",
+      "attempts": 1
+    },
+    "CO": {
+      "extracted_bytes": 862000000,
+      "transferred_bytes": 904000000,
+      "duration_seconds": 34.1,
+      "extracted_at": "2026-04-26T01:52:06+00:00",
+      "attempts": 1
+    },
+    "IE": {
+      "extracted_bytes": 517000000,
+      "transferred_bytes": 538000000,
+      "duration_seconds": 21.0,
+      "extracted_at": "2026-04-26T01:52:27+00:00",
+      "attempts": 1
+    },
+    "BR": {
+      "extracted_bytes": 5900000000,
+      "transferred_bytes": 6200000000,
+      "duration_seconds": 131.5,
+      "extracted_at": "2026-04-26T01:52:41+00:00",
+      "attempts": 1
+    },
+    "NL": {
+      "extracted_bytes": 1900000000,
+      "transferred_bytes": 2000000000,
+      "duration_seconds": 59.1,
+      "extracted_at": "2026-04-26T01:53:40+00:00",
+      "attempts": 1
+    },
+    "IT": {
+      "extracted_bytes": 4400000000,
+      "transferred_bytes": 4600000000,
+      "duration_seconds": 122.1,
+      "extracted_at": "2026-04-26T01:54:29+00:00",
+      "attempts": 1
+    },
+    "DE": {
+      "extracted_bytes": 7000000000,
+      "transferred_bytes": 7400000000,
+      "duration_seconds": 159.6,
+      "extracted_at": "2026-04-26T01:54:33+00:00",
+      "attempts": 1
+    },
+    "PT": {
+      "extracted_bytes": 622000000,
+      "transferred_bytes": 652000000,
+      "duration_seconds": 22.2,
+      "extracted_at": "2026-04-26T01:54:52+00:00",
+      "attempts": 1
+    },
+    "RO": {
+      "extracted_bytes": 1200000000,
+      "transferred_bytes": 1300000000,
+      "duration_seconds": 31.4,
+      "extracted_at": "2026-04-26T01:55:05+00:00",
+      "attempts": 1
+    },
+    "PL": {
+      "extracted_bytes": 4000000000,
+      "transferred_bytes": 4100000000,
+      "duration_seconds": 93.4,
+      "extracted_at": "2026-04-26T01:55:13+00:00",
+      "attempts": 1
+    },
+    "SK": {
+      "extracted_bytes": 762000000,
+      "transferred_bytes": 800000000,
+      "duration_seconds": 29.1,
+      "extracted_at": "2026-04-26T01:55:21+00:00",
+      "attempts": 1
+    },
+    "SI": {
+      "extracted_bytes": 628000000,
+      "transferred_bytes": 660000000,
+      "duration_seconds": 23.3,
+      "extracted_at": "2026-04-26T01:55:28+00:00",
+      "attempts": 1
+    },
+    "US": {
+      "extracted_bytes": 18000000000,
+      "transferred_bytes": 19000000000,
+      "duration_seconds": 323.6,
+      "extracted_at": "2026-04-26T01:55:30+00:00",
+      "attempts": 1
+    },
+    "IS": {
+      "extracted_bytes": 267000000,
+      "transferred_bytes": 278000000,
+      "duration_seconds": 11.4,
+      "extracted_at": "2026-04-26T01:55:39+00:00",
+      "attempts": 1
+    },
+    "FR": {
+      "extracted_bytes": 9500000000,
+      "transferred_bytes": 9900000000,
+      "duration_seconds": 234.5,
+      "extracted_at": "2026-04-26T01:55:41+00:00",
+      "attempts": 1
+    },
+    "CH": {
+      "extracted_bytes": 992000000,
+      "transferred_bytes": 1000000000,
+      "duration_seconds": 35.1,
+      "extracted_at": "2026-04-26T01:56:14+00:00",
+      "attempts": 1
+    },
+    "AD": {
+      "extracted_bytes": 9400000,
+      "transferred_bytes": 9800000,
+      "duration_seconds": 5.1,
+      "extracted_at": "2026-04-26T01:56:20+00:00",
+      "attempts": 1
+    },
+    "MC": {
+      "extracted_bytes": 3100000,
+      "transferred_bytes": 3300000,
+      "duration_seconds": 2.5,
+      "extracted_at": "2026-04-26T01:56:22+00:00",
+      "attempts": 1
+    },
+    "SM": {
+      "extracted_bytes": 3600000,
+      "transferred_bytes": 3800000,
+      "duration_seconds": 3.1,
+      "extracted_at": "2026-04-26T01:56:25+00:00",
+      "attempts": 1
+    },
+    "VA": {
+      "extracted_bytes": 2400000,
+      "transferred_bytes": 2500000,
+      "duration_seconds": 2.6,
+      "extracted_at": "2026-04-26T01:56:28+00:00",
+      "attempts": 1
+    },
+    "LI": {
+      "extracted_bytes": 10000000,
+      "transferred_bytes": 10000000,
+      "duration_seconds": 3.1,
+      "extracted_at": "2026-04-26T01:56:31+00:00",
+      "attempts": 1
+    },
+    "ES": {
+      "extracted_bytes": 3100000000,
+      "transferred_bytes": 3300000000,
+      "duration_seconds": 81.8,
+      "extracted_at": "2026-04-26T01:56:35+00:00",
+      "attempts": 1
+    },
+    "AL": {
+      "extracted_bytes": 152000000,
+      "transferred_bytes": 159000000,
+      "duration_seconds": 11.7,
+      "extracted_at": "2026-04-26T01:56:43+00:00",
+      "attempts": 1
+    },
+    "SE": {
+      "extracted_bytes": 3900000000,
+      "transferred_bytes": 4100000000,
+      "duration_seconds": 82.8,
+      "extracted_at": "2026-04-26T01:56:44+00:00",
+      "attempts": 1
+    },
+    "CA": {
+      "extracted_bytes": 18000000000,
+      "transferred_bytes": 19000000000,
+      "duration_seconds": 405.5,
+      "extracted_at": "2026-04-26T01:56:52+00:00",
+      "attempts": 1
+    },
+    "MK": {
+      "extracted_bytes": 93000000,
+      "transferred_bytes": 97000000,
+      "duration_seconds": 9.2,
+      "extracted_at": "2026-04-26T01:56:52+00:00",
+      "attempts": 1
+    },
+    "BA": {
+      "extracted_bytes": 440000000,
+      "transferred_bytes": 462000000,
+      "duration_seconds": 16.8,
+      "extracted_at": "2026-04-26T01:56:52+00:00",
+      "attempts": 1
+    },
+    "GB": {
+      "extracted_bytes": 2900000000,
+      "transferred_bytes": 3100000000,
+      "duration_seconds": 76.9,
+      "extracted_at": "2026-04-26T01:56:58+00:00",
+      "attempts": 1
+    },
+    "ME": {
+      "extracted_bytes": 118000000,
+      "transferred_bytes": 124000000,
+      "duration_seconds": 6.5,
+      "extracted_at": "2026-04-26T01:56:58+00:00",
+      "attempts": 1
+    },
+    "RS": {
+      "extracted_bytes": 612000000,
+      "transferred_bytes": 643000000,
+      "duration_seconds": 15.9,
+      "extracted_at": "2026-04-26T01:56:59+00:00",
+      "attempts": 1
+    },
+    "MD": {
+      "extracted_bytes": 294000000,
+      "transferred_bytes": 309000000,
+      "duration_seconds": 9.7,
+      "extracted_at": "2026-04-26T01:57:02+00:00",
+      "attempts": 1
+    },
+    "XK": {
+      "extracted_bytes": 99000000,
+      "transferred_bytes": 104000000,
+      "duration_seconds": 5.3,
+      "extracted_at": "2026-04-26T01:57:04+00:00",
+      "attempts": 1
+    },
+    "IL": {
+      "extracted_bytes": 174000000,
+      "transferred_bytes": 183000000,
+      "duration_seconds": 10.4,
+      "extracted_at": "2026-04-26T01:57:14+00:00",
+      "attempts": 1
+    },
+    "JO": {
+      "extracted_bytes": 185000000,
+      "transferred_bytes": 195000000,
+      "duration_seconds": 11.7,
+      "extracted_at": "2026-04-26T01:57:26+00:00",
+      "attempts": 1
+    },
+    "BY": {
+      "extracted_bytes": 1300000000,
+      "transferred_bytes": 1400000000,
+      "duration_seconds": 31.4,
+      "extracted_at": "2026-04-26T01:57:29+00:00",
+      "attempts": 1
+    },
+    "LB": {
+      "extracted_bytes": 80000000,
+      "transferred_bytes": 84000000,
+      "duration_seconds": 7.1,
+      "extracted_at": "2026-04-26T01:57:33+00:00",
+      "attempts": 1
+    },
+    "TR": {
+      "extracted_bytes": 1600000000,
+      "transferred_bytes": 1600000000,
+      "duration_seconds": 37.4,
+      "extracted_at": "2026-04-26T01:57:37+00:00",
+      "attempts": 1
+    },
+    "GL": {
+      "extracted_bytes": 1400000000,
+      "transferred_bytes": 1400000000,
+      "duration_seconds": 38.3,
+      "extracted_at": "2026-04-26T01:57:40+00:00",
+      "attempts": 1
+    },
+    "NO": {
+      "extracted_bytes": 6800000000,
+      "transferred_bytes": 7100000000,
+      "duration_seconds": 130.3,
+      "extracted_at": "2026-04-26T01:57:40+00:00",
+      "attempts": 1
+    },
+    "SY": {
+      "extracted_bytes": 280000000,
+      "transferred_bytes": 294000000,
+      "duration_seconds": 10.7,
+      "extracted_at": "2026-04-26T01:57:40+00:00",
+      "attempts": 1
+    },
+    "KW": {
+      "extracted_bytes": 23000000,
+      "transferred_bytes": 24000000,
+      "duration_seconds": 2.8,
+      "extracted_at": "2026-04-26T01:57:43+00:00",
+      "attempts": 1
+    },
+    "YE": {
+      "extracted_bytes": 165000000,
+      "transferred_bytes": 173000000,
+      "duration_seconds": 6.5,
+      "extracted_at": "2026-04-26T01:57:47+00:00",
+      "attempts": 1
+    },
+    "IQ": {
+      "extracted_bytes": 432000000,
+      "transferred_bytes": 454000000,
+      "duration_seconds": 16.1,
+      "extracted_at": "2026-04-26T01:57:49+00:00",
+      "attempts": 1
+    },
+    "OM": {
+      "extracted_bytes": 160000000,
+      "transferred_bytes": 168000000,
+      "duration_seconds": 7.2,
+      "extracted_at": "2026-04-26T01:57:50+00:00",
+      "attempts": 1
+    },
+    "QA": {
+      "extracted_bytes": 27000000,
+      "transferred_bytes": 28000000,
+      "duration_seconds": 3.6,
+      "extracted_at": "2026-04-26T01:57:52+00:00",
+      "attempts": 1
+    },
+    "AE": {
+      "extracted_bytes": 103000000,
+      "transferred_bytes": 108000000,
+      "duration_seconds": 6.0,
+      "extracted_at": "2026-04-26T01:57:53+00:00",
+      "attempts": 1
+    },
+    "BH": {
+      "extracted_bytes": 7300000,
+      "transferred_bytes": 7600000,
+      "duration_seconds": 3.2,
+      "extracted_at": "2026-04-26T01:57:53+00:00",
+      "attempts": 1
+    },
+    "IR": {
+      "extracted_bytes": 1100000000,
+      "transferred_bytes": 1200000000,
+      "duration_seconds": 16.8,
+      "extracted_at": "2026-04-26T01:57:54+00:00",
+      "attempts": 1
+    },
+    "UA": {
+      "extracted_bytes": 3600000000,
+      "transferred_bytes": 3800000000,
+      "duration_seconds": 62.3,
+      "extracted_at": "2026-04-26T01:57:54+00:00",
+      "attempts": 1
+    },
+    "TN": {
+      "extracted_bytes": 160000000,
+      "transferred_bytes": 168000000,
+      "duration_seconds": 6.2,
+      "extracted_at": "2026-04-26T01:58:00+00:00",
+      "attempts": 1
+    },
+    "LY": {
+      "extracted_bytes": 224000000,
+      "transferred_bytes": 235000000,
+      "duration_seconds": 8.5,
+      "extracted_at": "2026-04-26T01:58:02+00:00",
+      "attempts": 1
+    },
+    "SA": {
+      "extracted_bytes": 898000000,
+      "transferred_bytes": 943000000,
+      "duration_seconds": 21.7,
+      "extracted_at": "2026-04-26T01:58:02+00:00",
+      "attempts": 1
+    },
+    "EG": {
+      "extracted_bytes": 344000000,
+      "transferred_bytes": 361000000,
+      "duration_seconds": 9.3,
+      "extracted_at": "2026-04-26T01:58:02+00:00",
+      "attempts": 1
+    },
+    "MA": {
+      "extracted_bytes": 411000000,
+      "transferred_bytes": 431000000,
+      "duration_seconds": 8.8,
+      "extracted_at": "2026-04-26T01:58:03+00:00",
+      "attempts": 1
+    },
+    "EH": {
+      "extracted_bytes": 38000000,
+      "transferred_bytes": 39000000,
+      "duration_seconds": 3.9,
+      "extracted_at": "2026-04-26T01:58:04+00:00",
+      "attempts": 1
+    },
+    "DJ": {
+      "extracted_bytes": 13000000,
+      "transferred_bytes": 14000000,
+      "duration_seconds": 4.4,
+      "extracted_at": "2026-04-26T01:58:09+00:00",
+      "attempts": 1
+    },
+    "ER": {
+      "extracted_bytes": 102000000,
+      "transferred_bytes": 107000000,
+      "duration_seconds": 7.0,
+      "extracted_at": "2026-04-26T01:58:09+00:00",
+      "attempts": 1
+    },
+    "DZ": {
+      "extracted_bytes": 1100000000,
+      "transferred_bytes": 1100000000,
+      "duration_seconds": 18.7,
+      "extracted_at": "2026-04-26T01:58:11+00:00",
+      "attempts": 1
+    },
+    "SS": {
+      "extracted_bytes": 335000000,
+      "transferred_bytes": 352000000,
+      "duration_seconds": 10.2,
+      "extracted_at": "2026-04-26T01:58:12+00:00",
+      "attempts": 1
+    },
+    "SD": {
+      "extracted_bytes": 546000000,
+      "transferred_bytes": 573000000,
+      "duration_seconds": 12.6,
+      "extracted_at": "2026-04-26T01:58:14+00:00",
+      "attempts": 1
+    },
+    "RW": {
+      "extracted_bytes": 127000000,
+      "transferred_bytes": 133000000,
+      "duration_seconds": 4.2,
+      "extracted_at": "2026-04-26T01:58:16+00:00",
+      "attempts": 1
+    },
+    "ET": {
+      "extracted_bytes": 624000000,
+      "transferred_bytes": 654000000,
+      "duration_seconds": 13.8,
+      "extracted_at": "2026-04-26T01:58:16+00:00",
+      "attempts": 1
+    },
+    "BI": {
+      "extracted_bytes": 111000000,
+      "transferred_bytes": 116000000,
+      "duration_seconds": 4.5,
+      "extracted_at": "2026-04-26T01:58:19+00:00",
+      "attempts": 1
+    },
+    "KE": {
+      "extracted_bytes": 618000000,
+      "transferred_bytes": 649000000,
+      "duration_seconds": 10.6,
+      "extracted_at": "2026-04-26T01:58:20+00:00",
+      "attempts": 1
+    },
+    "SO": {
+      "extracted_bytes": 492000000,
+      "transferred_bytes": 514000000,
+      "duration_seconds": 11.6,
+      "extracted_at": "2026-04-26T01:58:20+00:00",
+      "attempts": 1
+    },
+    "UG": {
+      "extracted_bytes": 619000000,
+      "transferred_bytes": 650000000,
+      "duration_seconds": 10.7,
+      "extracted_at": "2026-04-26T01:58:22+00:00",
+      "attempts": 1
+    },
+    "GA": {
+      "extracted_bytes": 106000000,
+      "transferred_bytes": 111000000,
+      "duration_seconds": 6.0,
+      "extracted_at": "2026-04-26T01:58:26+00:00",
+      "attempts": 1
+    },
+    "CG": {
+      "extracted_bytes": 211000000,
+      "transferred_bytes": 221000000,
+      "duration_seconds": 14.5,
+      "extracted_at": "2026-04-26T01:58:33+00:00",
+      "attempts": 1
+    },
+    "CM": {
+      "extracted_bytes": 850000000,
+      "transferred_bytes": 892000000,
+      "duration_seconds": 13.1,
+      "extracted_at": "2026-04-26T01:58:34+00:00",
+      "attempts": 1
+    },
+    "CF": {
+      "extracted_bytes": 513000000,
+      "transferred_bytes": 538000000,
+      "duration_seconds": 12.8,
+      "extracted_at": "2026-04-26T01:58:35+00:00",
+      "attempts": 1
+    },
+    "TD": {
+      "extracted_bytes": 443000000,
+      "transferred_bytes": 465000000,
+      "duration_seconds": 14.4,
+      "extracted_at": "2026-04-26T01:58:40+00:00",
+      "attempts": 1
+    },
+    "BJ": {
+      "extracted_bytes": 233000000,
+      "transferred_bytes": 244000000,
+      "duration_seconds": 7.1,
+      "extracted_at": "2026-04-26T01:58:42+00:00",
+      "attempts": 1
+    },
+    "CD": {
+      "extracted_bytes": 1600000000,
+      "transferred_bytes": 1700000000,
+      "duration_seconds": 26.9,
+      "extracted_at": "2026-04-26T01:58:43+00:00",
+      "attempts": 1
+    },
+    "TZ": {
+      "extracted_bytes": 1100000000,
+      "transferred_bytes": 1100000000,
+      "duration_seconds": 29.4,
+      "extracted_at": "2026-04-26T01:58:46+00:00",
+      "attempts": 1
+    },
+    "NE": {
+      "extracted_bytes": 474000000,
+      "transferred_bytes": 497000000,
+      "duration_seconds": 13.1,
+      "extracted_at": "2026-04-26T01:58:46+00:00",
+      "attempts": 1
+    },
+    "TG": {
+      "extracted_bytes": 97000000,
+      "transferred_bytes": 102000000,
+      "duration_seconds": 7.7,
+      "extracted_at": "2026-04-26T01:58:48+00:00",
+      "attempts": 1
+    },
+    "GH": {
+      "extracted_bytes": 223000000,
+      "transferred_bytes": 234000000,
+      "duration_seconds": 8.3,
+      "extracted_at": "2026-04-26T01:58:50+00:00",
+      "attempts": 1
+    },
+    "CI": {
+      "extracted_bytes": 225000000,
+      "transferred_bytes": 236000000,
+      "duration_seconds": 6.2,
+      "extracted_at": "2026-04-26T01:58:52+00:00",
+      "attempts": 1
+    },
+    "LR": {
+      "extracted_bytes": 100000000,
+      "transferred_bytes": 104000000,
+      "duration_seconds": 5.5,
+      "extracted_at": "2026-04-26T01:58:53+00:00",
+      "attempts": 1
+    },
+    "NG": {
+      "extracted_bytes": 1300000000,
+      "transferred_bytes": 1300000000,
+      "duration_seconds": 20.3,
+      "extracted_at": "2026-04-26T01:58:54+00:00",
+      "attempts": 1
+    },
+    "BF": {
+      "extracted_bytes": 338000000,
+      "transferred_bytes": 354000000,
+      "duration_seconds": 10.8,
+      "extracted_at": "2026-04-26T01:58:54+00:00",
+      "attempts": 1
+    },
+    "SL": {
+      "extracted_bytes": 86000000,
+      "transferred_bytes": 90000000,
+      "duration_seconds": 5.3,
+      "extracted_at": "2026-04-26T01:58:55+00:00",
+      "attempts": 1
+    },
+    "GM": {
+      "extracted_bytes": 43000000,
+      "transferred_bytes": 45000000,
+      "duration_seconds": 3.3,
+      "extracted_at": "2026-04-26T01:58:57+00:00",
+      "attempts": 1
+    },
+    "SN": {
+      "extracted_bytes": 209000000,
+      "transferred_bytes": 219000000,
+      "duration_seconds": 3.7,
+      "extracted_at": "2026-04-26T01:58:58+00:00",
+      "attempts": 1
+    },
+    "GW": {
+      "extracted_bytes": 42000000,
+      "transferred_bytes": 44000000,
+      "duration_seconds": 4.4,
+      "extracted_at": "2026-04-26T01:58:58+00:00",
+      "attempts": 1
+    },
+    "GN": {
+      "extracted_bytes": 304000000,
+      "transferred_bytes": 318000000,
+      "duration_seconds": 6.6,
+      "extracted_at": "2026-04-26T01:58:59+00:00",
+      "attempts": 1
+    },
+    "CV": {
+      "extracted_bytes": 17000000,
+      "transferred_bytes": 17000000,
+      "duration_seconds": 1.6,
+      "extracted_at": "2026-04-26T01:58:59+00:00",
+      "attempts": 1
+    },
+    "ST": {
+      "extracted_bytes": 3200000,
+      "transferred_bytes": 3300000,
+      "duration_seconds": 2.0,
+      "extracted_at": "2026-04-26T01:59:00+00:00",
+      "attempts": 1
+    },
+    "ML": {
+      "extracted_bytes": 732000000,
+      "transferred_bytes": 769000000,
+      "duration_seconds": 14.2,
+      "extracted_at": "2026-04-26T01:59:00+00:00",
+      "attempts": 1
+    },
+    "MR": {
+      "extracted_bytes": 174000000,
+      "transferred_bytes": 183000000,
+      "duration_seconds": 6.1,
+      "extracted_at": "2026-04-26T01:59:01+00:00",
+      "attempts": 1
+    },
+    "GQ": {
+      "extracted_bytes": 64000000,
+      "transferred_bytes": 68000000,
+      "duration_seconds": 6.5,
+      "extracted_at": "2026-04-26T01:59:04+00:00",
+      "attempts": 1
+    },
+    "BW": {
+      "extracted_bytes": 344000000,
+      "transferred_bytes": 362000000,
+      "duration_seconds": 7.7,
+      "extracted_at": "2026-04-26T01:59:07+00:00",
+      "attempts": 1
+    },
+    "AO": {
+      "extracted_bytes": 432000000,
+      "transferred_bytes": 454000000,
+      "duration_seconds": 10.4,
+      "extracted_at": "2026-04-26T01:59:09+00:00",
+      "attempts": 1
+    },
+    "ZW": {
+      "extracted_bytes": 334000000,
+      "transferred_bytes": 351000000,
+      "duration_seconds": 9.8,
+      "extracted_at": "2026-04-26T01:59:09+00:00",
+      "attempts": 1
+    },
+    "NA": {
+      "extracted_bytes": 269000000,
+      "transferred_bytes": 282000000,
+      "duration_seconds": 9.1,
+      "extracted_at": "2026-04-26T01:59:10+00:00",
+      "attempts": 1
+    },
+    "ZM": {
+      "extracted_bytes": 625000000,
+      "transferred_bytes": 656000000,
+      "duration_seconds": 13.2,
+      "extracted_at": "2026-04-26T01:59:12+00:00",
+      "attempts": 1
+    },
+    "LS": {
+      "extracted_bytes": 169000000,
+      "transferred_bytes": 177000000,
+      "duration_seconds": 4.7,
+      "extracted_at": "2026-04-26T01:59:12+00:00",
+      "attempts": 1
+    },
+    "SZ": {
+      "extracted_bytes": 43000000,
+      "transferred_bytes": 45000000,
+      "duration_seconds": 4.3,
+      "extracted_at": "2026-04-26T01:59:14+00:00",
+      "attempts": 1
+    },
+    "MU": {
+      "extracted_bytes": 12000000,
+      "transferred_bytes": 13000000,
+      "duration_seconds": 2.7,
+      "extracted_at": "2026-04-26T01:59:15+00:00",
+      "attempts": 1
+    },
+    "KM": {
+      "extracted_bytes": 4600000,
+      "transferred_bytes": 4800000,
+      "duration_seconds": 2.9,
+      "extracted_at": "2026-04-26T01:59:15+00:00",
+      "attempts": 1
+    },
+    "SC": {
+      "extracted_bytes": 2600000,
+      "transferred_bytes": 2700000,
+      "duration_seconds": 1.5,
+      "extracted_at": "2026-04-26T01:59:15+00:00",
+      "attempts": 1
+    },
+    "ZA": {
+      "extracted_bytes": 1000000000,
+      "transferred_bytes": 1100000000,
+      "duration_seconds": 13.9,
+      "extracted_at": "2026-04-26T01:59:18+00:00",
+      "attempts": 1
+    },
+    "MG": {
+      "extracted_bytes": 594000000,
+      "transferred_bytes": 620000000,
+      "duration_seconds": 10.8,
+      "extracted_at": "2026-04-26T01:59:21+00:00",
+      "attempts": 1
+    },
+    "MZ": {
+      "extracted_bytes": 734000000,
+      "transferred_bytes": 770000000,
+      "duration_seconds": 13.1,
+      "extracted_at": "2026-04-26T01:59:23+00:00",
+      "attempts": 1
+    },
+    "KR": {
+      "extracted_bytes": 506000000,
+      "transferred_bytes": 530000000,
+      "duration_seconds": 9.4,
+      "extracted_at": "2026-04-26T01:59:25+00:00",
+      "attempts": 1
+    },
+    "KP": {
+      "extracted_bytes": 297000000,
+      "transferred_bytes": 312000000,
+      "duration_seconds": 7.5,
+      "extracted_at": "2026-04-26T01:59:26+00:00",
+      "attempts": 1
+    },
+    "TW": {
+      "extracted_bytes": 243000000,
+      "transferred_bytes": 254000000,
+      "duration_seconds": 4.0,
+      "extracted_at": "2026-04-26T01:59:27+00:00",
+      "attempts": 1
+    },
+    "HK": {
+      "extracted_bytes": 41000000,
+      "transferred_bytes": 43000000,
+      "duration_seconds": 2.6,
+      "extracted_at": "2026-04-26T01:59:27+00:00",
+      "attempts": 1
+    },
+    "MO": {
+      "extracted_bytes": 3900000,
+      "transferred_bytes": 4100000,
+      "duration_seconds": 2.0,
+      "extracted_at": "2026-04-26T01:59:28+00:00",
+      "attempts": 1
+    },
+    "BD": {
+      "extracted_bytes": 513000000,
+      "transferred_bytes": 538000000,
+      "duration_seconds": 11.1,
+      "extracted_at": "2026-04-26T01:59:39+00:00",
+      "attempts": 1
+    },
+    "MN": {
+      "extracted_bytes": 586000000,
+      "transferred_bytes": 616000000,
+      "duration_seconds": 19.4,
+      "extracted_at": "2026-04-26T01:59:41+00:00",
+      "attempts": 1
+    },
+    "LK": {
+      "extracted_bytes": 174000000,
+      "transferred_bytes": 182000000,
+      "duration_seconds": 10.8,
+      "extracted_at": "2026-04-26T01:59:49+00:00",
+      "attempts": 1
+    },
+    "PK": {
+      "extracted_bytes": 1100000000,
+      "transferred_bytes": 1200000000,
+      "duration_seconds": 22.5,
+      "extracted_at": "2026-04-26T01:59:50+00:00",
+      "attempts": 1
+    },
+    "MV": {
+      "extracted_bytes": 9100000,
+      "transferred_bytes": 9400000,
+      "duration_seconds": 4.8,
+      "extracted_at": "2026-04-26T01:59:54+00:00",
+      "attempts": 1
+    },
+    "BT": {
+      "extracted_bytes": 70000000,
+      "transferred_bytes": 74000000,
+      "duration_seconds": 7.5,
+      "extracted_at": "2026-04-26T01:59:57+00:00",
+      "attempts": 1
+    },
+    "NP": {
+      "extracted_bytes": 676000000,
+      "transferred_bytes": 709000000,
+      "duration_seconds": 17.4,
+      "extracted_at": "2026-04-26T01:59:58+00:00",
+      "attempts": 1
+    },
+    "AF": {
+      "extracted_bytes": 664000000,
+      "transferred_bytes": 696000000,
+      "duration_seconds": 23.2,
+      "extracted_at": "2026-04-26T02:00:18+00:00",
+      "attempts": 1
+    },
+    "JP": {
+      "extracted_bytes": 3500000000,
+      "transferred_bytes": 3700000000,
+      "duration_seconds": 63.3,
+      "extracted_at": "2026-04-26T02:00:18+00:00",
+      "attempts": 1
+    },
+    "TH": {
+      "extracted_bytes": 853000000,
+      "transferred_bytes": 895000000,
+      "duration_seconds": 21.3,
+      "extracted_at": "2026-04-26T02:00:18+00:00",
+      "attempts": 1
+    },
+    "VN": {
+      "extracted_bytes": 862000000,
+      "transferred_bytes": 904000000,
+      "duration_seconds": 29.1,
+      "extracted_at": "2026-04-26T02:00:27+00:00",
+      "attempts": 1
+    },
+    "KH": {
+      "extracted_bytes": 178000000,
+      "transferred_bytes": 187000000,
+      "duration_seconds": 12.9,
+      "extracted_at": "2026-04-26T02:00:31+00:00",
+      "attempts": 1
+    },
+    "LA": {
+      "extracted_bytes": 639000000,
+      "transferred_bytes": 671000000,
+      "duration_seconds": 17.7,
+      "extracted_at": "2026-04-26T02:00:35+00:00",
+      "attempts": 1
+    },
+    "SG": {
+      "extracted_bytes": 26000000,
+      "transferred_bytes": 28000000,
+      "duration_seconds": 4.6,
+      "extracted_at": "2026-04-26T02:00:36+00:00",
+      "attempts": 1
+    },
+    "MY": {
+      "extracted_bytes": 440000000,
+      "transferred_bytes": 462000000,
+      "duration_seconds": 14.0,
+      "extracted_at": "2026-04-26T02:00:41+00:00",
+      "attempts": 1
+    },
+    "BN": {
+      "extracted_bytes": 13000000,
+      "transferred_bytes": 14000000,
+      "duration_seconds": 3.4,
+      "extracted_at": "2026-04-26T02:00:45+00:00",
+      "attempts": 1
+    },
+    "MM": {
+      "extracted_bytes": 1100000000,
+      "transferred_bytes": 1100000000,
+      "duration_seconds": 27.9,
+      "extracted_at": "2026-04-26T02:00:46+00:00",
+      "attempts": 1
+    },
+    "TL": {
+      "extracted_bytes": 33000000,
+      "transferred_bytes": 34000000,
+      "duration_seconds": 4.1,
+      "extracted_at": "2026-04-26T02:00:49+00:00",
+      "attempts": 1
+    },
+    "PH": {
+      "extracted_bytes": 714000000,
+      "transferred_bytes": 748000000,
+      "duration_seconds": 18.6,
+      "extracted_at": "2026-04-26T02:00:54+00:00",
+      "attempts": 1
+    },
+    "IN": {
+      "extracted_bytes": 5100000000,
+      "transferred_bytes": 5400000000,
+      "duration_seconds": 90.2,
+      "extracted_at": "2026-04-26T02:00:57+00:00",
+      "attempts": 1
+    },
+    "PG": {
+      "extracted_bytes": 153000000,
+      "transferred_bytes": 161000000,
+      "duration_seconds": 8.2,
+      "extracted_at": "2026-04-26T02:01:03+00:00",
+      "attempts": 1
+    },
+    "FJ": {
+      "extracted_bytes": 25000000,
+      "transferred_bytes": 26000000,
+      "duration_seconds": 7.0,
+      "extracted_at": "2026-04-26T02:01:04+00:00",
+      "attempts": 1
+    },
+    "VU": {
+      "extracted_bytes": 12000000,
+      "transferred_bytes": 12000000,
+      "duration_seconds": 3.3,
+      "extracted_at": "2026-04-26T02:01:07+00:00",
+      "attempts": 1
+    },
+    "SB": {
+      "extracted_bytes": 34000000,
+      "transferred_bytes": 36000000,
+      "duration_seconds": 5.2,
+      "extracted_at": "2026-04-26T02:01:08+00:00",
+      "attempts": 1
+    },
+    "NZ": {
+      "extracted_bytes": 624000000,
+      "transferred_bytes": 652000000,
+      "duration_seconds": 21.4,
+      "extracted_at": "2026-04-26T02:01:10+00:00",
+      "attempts": 1
+    },
+    "WS": {
+      "extracted_bytes": 4500000,
+      "transferred_bytes": 4700000,
+      "duration_seconds": 3.6,
+      "extracted_at": "2026-04-26T02:01:11+00:00",
+      "attempts": 1
+    },
+    "NC": {
+      "extracted_bytes": 23000000,
+      "transferred_bytes": 24000000,
+      "duration_seconds": 4.5,
+      "extracted_at": "2026-04-26T02:01:12+00:00",
+      "attempts": 1
+    },
+    "TO": {
+      "extracted_bytes": 6900000,
+      "transferred_bytes": 7200000,
+      "duration_seconds": 2.6,
+      "extracted_at": "2026-04-26T02:01:13+00:00",
+      "attempts": 1
+    },
+    "FM": {
+      "extracted_bytes": 5100000,
+      "transferred_bytes": 5300000,
+      "duration_seconds": 2.5,
+      "extracted_at": "2026-04-26T02:01:14+00:00",
+      "attempts": 1
+    },
+    "MH": {
+      "extracted_bytes": 5200000,
+      "transferred_bytes": 5400000,
+      "duration_seconds": 3.2,
+      "extracted_at": "2026-04-26T02:01:16+00:00",
+      "attempts": 1
+    },
+    "NR": {
+      "extracted_bytes": 514000,
+      "transferred_bytes": 514000,
+      "duration_seconds": 2.7,
+      "extracted_at": "2026-04-26T02:01:17+00:00",
+      "attempts": 1
+    },
+    "PW": {
+      "extracted_bytes": 2700000,
+      "transferred_bytes": 2800000,
+      "duration_seconds": 2.0,
+      "extracted_at": "2026-04-26T02:01:18+00:00",
+      "attempts": 1
+    },
+    "TV": {
+      "extracted_bytes": 837000,
+      "transferred_bytes": 839000,
+      "duration_seconds": 2.1,
+      "extracted_at": "2026-04-26T02:01:19+00:00",
+      "attempts": 1
+    },
+    "ID": {
+      "extracted_bytes": 2300000000,
+      "transferred_bytes": 2400000000,
+      "duration_seconds": 44.1,
+      "extracted_at": "2026-04-26T02:01:19+00:00",
+      "attempts": 1
+    },
+    "PF": {
+      "extracted_bytes": 28000000,
+      "transferred_bytes": 29000000,
+      "duration_seconds": 2.5,
+      "extracted_at": "2026-04-26T02:01:20+00:00",
+      "attempts": 1
+    },
+    "AU": {
+      "extracted_bytes": 2100000000,
+      "transferred_bytes": 2200000000,
+      "duration_seconds": 35.2,
+      "extracted_at": "2026-04-26T02:01:21+00:00",
+      "attempts": 1
+    },
+    "AQ": {
+      "extracted_bytes": 423000000,
+      "transferred_bytes": 444000000,
+      "duration_seconds": 26.0,
+      "extracted_at": "2026-04-26T02:01:45+00:00",
+      "attempts": 1
+    },
+    "CN": {
+      "extracted_bytes": 12000000000,
+      "transferred_bytes": 12000000000,
+      "duration_seconds": 190.0,
+      "extracted_at": "2026-04-26T02:02:25+00:00",
+      "attempts": 1
+    },
+    "RU": {
+      "extracted_bytes": 24000000000,
+      "transferred_bytes": 25000000000,
+      "duration_seconds": 227.4,
+      "extracted_at": "2026-04-26T02:05:07+00:00",
+      "attempts": 1
+    },
+    "KI": {
+      "extracted_bytes": 3700000,
+      "transferred_bytes": 3800000,
+      "duration_seconds": 1.8,
+      "extracted_at": "2026-04-26T02:06:33+00:00",
+      "attempts": 1
+    }
+  },
+  "failures": []
+}
