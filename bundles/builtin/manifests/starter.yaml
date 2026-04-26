@@ -1,33 +1,33 @@
 id: starter
 name: Starter
 description: |
-  A practical kit covering medical reference, repair guides, survival
-  fundamentals, and offline maps for North America. A reasonable first
-  install for a Pi 4B with a 256 GB SSD.
+  A compact preparedness kit — emergency medical reference, repair
+  guides, post-disaster survival notes, food preparation, and
+  appropriate-technology techniques. Roughly 5 GB; comfortably fits on
+  a 32 GB SD card alongside the OS, your maps, and free space.
 license_notes: |
-  Includes CC BY-NC-SA content (iFixit). Personal and educational use only;
+  iFixit content is CC BY-NC-SA. Personal and educational use only;
   commercial redistribution (e.g. selling preloaded SD cards) is not
   permitted by the upstream license.
 
 items:
-  # Medical reference — small, broadly useful, public-domain-friendly.
+  # WikEM — emergency medicine quick reference.
   - kind: zim
-    book_id: wikem_en_all
+    book_id: wikem_en_all_nopic
 
-  # Repair guides — iFixit, BY-NC-SA.
+  # iFixit repair guides. Only one flavor exists.
   - kind: zim
     book_id: ifixit_en_all
 
-  # First aid / survival reference. Project Gutenberg holds the
-  # Kearny "Nuclear War Survival Skills" mirror and many US Army
-  # field manuals (FM 21-76 etc.) as public-domain texts.
+  # Post-disaster reference (zimgit).
   - kind: zim
-    book_id: gutenberg_en_all
+    book_id: zimgit-post-disaster_en
 
-  # Offline maps — North America bundle covers US/CA/MX in one queue.
-  - kind: map_region
-    region_id: US
-  - kind: map_region
-    region_id: CA
-  - kind: map_region
-    region_id: MX
+  # Food storage and preparation for preppers (zimgit).
+  - kind: zim
+    book_id: zimgit-food-preparation_en
+
+  # Appropedia — sustainable / appropriate-technology wiki, useful for
+  # off-grid living, water purification, simple machines, etc.
+  - kind: zim
+    book_id: appropedia_en_all

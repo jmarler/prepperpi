@@ -1,0 +1,15 @@
+[Unit]
+Description=PrepperPi — periodic update-availability check
+Documentation=https://github.com/jmarler/prepperpi
+
+[Timer]
+# Catches the steady-state case where the Pi was already online and
+# upstream content shifted. The NetworkManager dispatcher hook covers
+# the uplink-up edge.
+OnBootSec=2min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

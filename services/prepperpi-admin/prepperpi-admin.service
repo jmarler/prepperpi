@@ -41,7 +41,7 @@ ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
 # even root. UNIX perms still keep the unprivileged uvicorn process
 # (which has no write permission to the file) from touching it
 # directly; only the wrapper, escalated via sudo to root, can write.
-ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps /var/lib/prepperpi/bundles /etc/prepperpi/bundles
+ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps /srv/prepperpi/zim /var/lib/prepperpi/bundles /etc/prepperpi/bundles /var/lib/prepperpi/updates
 # /srv/prepperpi/cache for the kiwix-catalog.json cache.
 # /srv/prepperpi/maps for the region-uninstall path: the admin
 # console deletes <region>.mbtiles directly (no privileged worker —
@@ -49,16 +49,21 @@ ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps /var/lib/
 # /var/lib/prepperpi/bundles caches fetched remote bundle manifests
 # and per-install state. /etc/prepperpi/bundles holds the editable
 # sources.json (admin can add community URLs).
+# /var/lib/prepperpi/updates holds state.json (latest update-availability
+# snapshot) and pins.json (per-item update pins).
 #
-# We DO NOT add /srv/prepperpi/zim or user-usb here. Two reasons:
-#   1. aria2c (running as `prepperpi`, which owns those paths) does
-#      all the actual writing, including auto-creating destination
-#      dirs at download time, so admin doesn't need write access.
-#   2. Adding user-usb here creates a bind mount in admin's mount
-#      namespace, which silently breaks the USB write-toggle wrapper:
-#      sudo'd `mount -o remount,rw` would target the bind mount, not
-#      the underlying USB device, so the host's /proc/mounts stays ro
-#      and writes still fail.
+# /srv/prepperpi/zim is added so the admin can unlink ZIMs (e.g. old
+# versions left behind after a side-by-side update). aria2c (running
+# as `prepperpi`, which OWNS the directory) still does all the
+# *creating*; admin only deletes. UNIX perms gate further: setup.sh
+# adds prepperpi-admin to the `prepperpi` group and chmods the dir to
+# 775 so group members can unlink files in it.
+#
+# We DO NOT add /srv/prepperpi/user-usb here. Adding it creates a bind
+# mount in admin's mount namespace, which silently breaks the USB
+# write-toggle wrapper: sudo'd `mount -o remount,rw` would target the
+# bind mount, not the underlying USB device, so the host's /proc/mounts
+# stays ro and writes still fail.
 LockPersonality=true
 RestrictNamespaces=mnt
 # Was `true` (deny everything), but `RestrictNamespaces=true` installs

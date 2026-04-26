@@ -1,15 +1,16 @@
 id: medical
 name: Medical
 description: |
-  Focused medical reference — emergency care, drug references, anatomy,
-  and the WikiMed encyclopedia. Useful as a standalone install on a small
-  Pi or as a supplement to Starter / Complete.
+  Focused medical reference — WikEM emergency-medicine quick reference
+  plus Wikipedia's medical subset (conditions, treatments, anatomy,
+  pharmacology). Roughly 1 GB.
 
 items:
+  # WikEM — emergency medicine. Pick the maxi flavor here; this bundle
+  # is medical-first so we trade some bytes for richer content.
   - kind: zim
-    book_id: wikem_en_all
+    book_id: wikem_en_all_maxi
 
-  # Wikipedia's medical subset — much smaller than full Wikipedia, focused
-  # on conditions, treatments, anatomy, and pharmacology.
+  # Wikipedia's medical subset, no images. ~800 MB.
   - kind: zim
-    book_id: wikipedia_en_medicine
+    book_id: wikipedia_en_medicine_nopic

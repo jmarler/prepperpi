@@ -6,6 +6,60 @@
 	background: var(--bg);
 	color: var(--ink);
 	min-height: 100vh;
+	/* Belt + suspenders against the catalog page going wider than the
+	 * viewport on phones. `overflow-x: hidden` here clips at the body;
+	 * the rules below let inner content wrap or scroll on its own. */
+	overflow-x: hidden;
+	max-width: 100vw;
+}
+
+html { overflow-x: hidden; }
+
+/* Containers — keep every admin-page section bounded by its parent
+ * width so a wide grandchild never escapes upward through the layout. */
+.admin-layout,
+.admin-main,
+.admin-nav,
+.catalog-section,
+.catalog-meta,
+.storage-list,
+.admin-bundle-grid,
+.admin-card {
+	max-width: 100%;
+	overflow-x: hidden;
+}
+
+/* Make the most common content offenders wrap naturally. min-width: 0
+ * lets flex children shrink below their content width so the parent's
+ * wrap kicks in; overflow-wrap: anywhere lets long URLs / book names
+ * break mid-string. */
+.storage-row,
+.storage-row__head,
+.storage-row__head > *,
+.storage-row__label,
+.storage-row__usage,
+.catalog-book__summary,
+.admin-bundle-card {
+	min-width: 0;
+}
+
+.storage-row__label,
+.storage-row__usage,
+.catalog-book__summary,
+.admin-bundle-card,
+.admin-bundle-card__items,
+.admin-table,
+.admin-table code,
+.admin-update__older-list code {
+	overflow-wrap: anywhere;
+	word-break: break-word;
+}
+
+/* A long category name in the catalog filter <select> uses
+ * intrinsic-min-content sizing by default and can push the row wider
+ * than the viewport. Caps the filter dropdowns to 100% of their cell. */
+.admin-form__input {
+	max-width: 100%;
 }
 
 .admin-header {
@@ -96,7 +150,7 @@
 }
 
 @media (min-width: 32rem) {
-	.admin-card-list { grid-template-columns: 1fr 1fr; }
+	.admin-card-list { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 .admin-card {
@@ -321,7 +375,7 @@
 }
 
 @media (min-width: 32rem) {
-	.storage-stats { grid-template-columns: 1fr 1fr; }
+	.storage-stats { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 .storage-stat {
@@ -517,16 +571,19 @@
 
 .catalog-filters {
 	display: grid;
-	grid-template-columns: 1fr;
+	grid-template-columns: minmax(0, 1fr);
 	gap: 0.6rem;
 }
 
 @media (min-width: 32rem) {
-	.catalog-filters { grid-template-columns: 1fr 1fr; }
+	.catalog-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 @media (min-width: 50rem) {
-	.catalog-filters { grid-template-columns: 1fr 1fr 1fr 1fr; }
+	.catalog-filters {
+		grid-template-columns:
+			minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+	}
 }
 
 .catalog-filter {
@@ -534,6 +591,15 @@
 	flex-direction: column;
 	gap: 0.25rem;
 	font-size: 0.85rem;
+	/* min-width: 0 lets the inner <select>/<input> shrink below its
+	 * intrinsic min-content (a single long category name otherwise
+	 * forces this grid track to expand and stretches the whole page). */
+	min-width: 0;
+}
+
+.catalog-filter > .admin-form__input {
+	width: 100%;
+	min-width: 0;
 }
 
 .catalog-filter span {
@@ -839,12 +905,12 @@
 }
 
 @media (min-width: 40rem) {
-	.admin-catalog-grid { grid-template-columns: 1fr 1fr; }
+	.admin-catalog-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
 
 .admin-catalog-row__label {
 	display: grid;
-	grid-template-columns: 1.25rem 2.4rem 1fr auto auto;
+	grid-template-columns: 1.25rem 2.4rem minmax(0, 1fr) auto auto;
 	gap: 0.5rem;
 	align-items: center;
 	padding: 0.3rem 0.5rem;
@@ -912,4 +978,222 @@
 .admin-toast--visible {
 	opacity: 1;
 	transform: translateY(0);
+}
+
+/* ---------- updates dashboard ---------- */
+
+.admin-nav__badge {
+	display: inline-block;
+	min-width: 1.4rem;
+	padding: 0 0.4rem;
+	margin-left: 0.25rem;
+	border-radius: 999px;
+	background: #c0392b;
+	color: #fff;
+	font-size: 0.8rem;
+	font-weight: 700;
+	text-align: center;
+	line-height: 1.4rem;
+	vertical-align: baseline;
+}
+
+.admin-card__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 1rem;
+	flex-wrap: wrap;
+}
+
+.admin-card__meta,
+.admin-card__meta-inline {
+	color: var(--ink-dim);
+	font-size: 0.9rem;
+}
+
+.admin-card__meta-inline {
+	margin-left: 0.5rem;
+}
+
+.admin-card__actions {
+	margin: 0.5rem 0 0;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.admin-card__errors {
+	margin-top: 0.5rem;
+	color: var(--ink-dim);
+	font-size: 0.9rem;
+}
+
+.admin-card--updates {
+	margin-top: 1rem;
+}
+
+.admin-pill {
+	display: inline-block;
+	padding: 0.05rem 0.5rem;
+	margin-left: 0.4rem;
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 600;
+	vertical-align: baseline;
+}
+
+.admin-pill--stale   { background: #c0392b; color: #fff; }
+.admin-pill--pinned  { background: #2c3e50; color: #fff; }
+.admin-pill--current { background: #27ae60; color: #fff; }
+.admin-pill--unknown { background: #7f8c8d; color: #fff; }
+
+.admin-update__error {
+	color: #c0392b;
+}
+
+.admin-update__actions {
+	display: flex;
+	gap: 0.4rem;
+	flex-wrap: wrap;
+}
+
+.admin-update__form {
+	display: inline-block;
+	margin: 0;
+}
+
+.admin-update__older {
+	margin-top: 0.4rem;
+	padding: 0.4rem 0.6rem;
+	background: var(--panel-dim, #f4f1ea);
+	border-left: 3px solid var(--ink-dim);
+	font-size: 0.85rem;
+}
+
+.admin-update__older-list {
+	list-style: none;
+	padding: 0;
+	margin: 0.25rem 0 0;
+}
+
+.admin-update__older-list li {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.15rem 0;
+}
+
+.admin-btn--small {
+	padding: 0.15rem 0.5rem;
+	font-size: 0.8rem;
+}
+
+/* ---------- bundles page ---------- */
+
+.admin-bundle-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	margin: 0.5rem 0 1rem;
+}
+
+.admin-bundle-toolbar__refresh { margin: 0; }
+
+.admin-bundle-toolbar__meta {
+	color: var(--ink-dim);
+	font-size: 0.9rem;
+}
+
+.admin-callout {
+	background: var(--panel);
+	border-left: 3px solid var(--accent);
+	padding: 0.6rem 0.85rem;
+	border-radius: var(--radius);
+	font-size: 0.95rem;
+	margin: 0.5rem 0 1rem;
+}
+
+.admin-bundle-grid {
+	display: grid;
+	grid-template-columns: 1fr;
+	gap: 1rem;
+	margin: 1rem 0;
+}
+
+@media (min-width: 40rem) {
+	.admin-bundle-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.admin-bundle-card {
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.85rem 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.4rem;
+}
+
+.admin-bundle-card__head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.admin-bundle-card__title {
+	margin: 0;
+	font-size: 1.1rem;
+	color: var(--accent);
+}
+
+.admin-bundle-card__size {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	color: var(--ink);
+}
+
+.admin-bundle-card__source {
+	margin: 0;
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+}
+
+.admin-bundle-card__description {
+	margin: 0.25rem 0 0;
+	font-size: 0.95rem;
+}
+
+.admin-bundle-card__errors {
+	margin: 0.25rem 0 0;
+	color: #c0392b;
+	font-size: 0.85rem;
+}
+
+.admin-bundle-card__items {
+	margin: 0.25rem 0 0;
+	font-size: 0.9rem;
+}
+
+.admin-bundle-card__items ul {
+	margin: 0.4rem 0;
+	padding-left: 1.2rem;
+}
+
+.admin-bundle-card__license {
+	margin: 0.4rem 0 0;
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+}
+
+.admin-bundle-card__action {
+	margin: 0.5rem 0 0;
+}
+
+.admin-bundle-card__item-size {
+	color: var(--ink-dim);
+	margin-left: 0.25rem;
 }

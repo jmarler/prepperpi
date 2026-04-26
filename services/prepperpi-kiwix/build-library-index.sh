@@ -324,7 +324,10 @@ main() {
     echo "build-library-index.sh must be run as root" >&2
     exit 1
   fi
-  install -d -m 0755 "$ZIM_DIR" 2>/dev/null || true
+  # 0775 (not 0755) so the prepperpi-admin user — which is in the
+  # `prepperpi` group — can unlink ZIMs from the directory. Aria2c
+  # writes here as `prepperpi`; admin only deletes.
+  install -d -m 0775 "$ZIM_DIR" 2>/dev/null || true
   rebuild_library_xml
   rebuild_fragment
   reload_kiwix

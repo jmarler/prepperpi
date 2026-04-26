@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""prepperpi-updates-check — run the update-detection pass.
+
+Invoked by:
+  - the .timer (every 6h),
+  - the NetworkManager dispatcher hook (on uplink up),
+  - the admin "Check now" button (via the route, which calls the same
+    Python entry point in-process — see app/updates_state.py).
+
+Bails fast with a clear log line if no Ethernet uplink is up. The
+service unit gates on the same condition (ConditionPathExists), but
+running the check anyway lets us write a "no uplink" snapshot so the
+UI can say "no uplink, last successful check at ..." instead of going
+silent.
+"""
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Allow execution from /opt/prepperpi/services/prepperpi-admin/ — the
+# app directory is alongside the script in the deployed layout.
+HERE = Path(__file__).resolve().parent
+APP_DIR = HERE / "app"
+sys.path.insert(0, str(APP_DIR))
+
+from updates_state import compute_snapshot, write_snapshot  # noqa: E402
+from uplink import detect_uplink  # noqa: E402
+
+
+def main() -> int:
+    uplink_ok = bool(detect_uplink().get("ethernet"))
+    snapshot = compute_snapshot(uplink_ok=uplink_ok)
+    write_snapshot(snapshot)
+    print(
+        f"prepperpi-updates-check: uplink={snapshot['uplink']} "
+        f"items={len(snapshot['items'])} "
+        f"stale={snapshot['stale_count']} "
+        f"errors={len(snapshot['errors'])}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

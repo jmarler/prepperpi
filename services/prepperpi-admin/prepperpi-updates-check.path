@@ -1,0 +1,16 @@
+[Unit]
+Description=PrepperPi — refresh update snapshot when content changes on disk
+Documentation=https://github.com/jmarler/prepperpi
+
+[Path]
+# PathChanged fires on the directory's ctime, which covers create /
+# delete / rename of any file inside. Same trigger pattern as
+# prepperpi-kiwix-reindex.path. We watch the ZIM and maps directories
+# so a fresh download (or a manual delete) refreshes the Updates page
+# without the user having to click "Check now."
+PathChanged=/srv/prepperpi/zim
+PathChanged=/srv/prepperpi/maps
+Unit=prepperpi-updates-check.service
+
+[Install]
+WantedBy=multi-user.target

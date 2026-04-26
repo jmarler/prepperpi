@@ -34,11 +34,11 @@ PrepperPi is **alpha**. The base appliance, the content layer, the admin console
 - ✅ **Offline maps — tile server** — drop an OpenMapTiles `.mbtiles` or `.pmtiles` into `/srv/prepperpi/maps/` and a full-screen MapLibre GL JS map of the installed region(s) appears at `/maps/`; multiple regions render seamlessly via a composite OSM-Bright style with one source per region; per-region uninstall from the admin console. No-JS users see a static fallback so the page is never blank
 - ✅ **Offline maps — region downloader** — admin console catalog of ~200 ISO countries grouped into 8 one-click bundles (NA, LATAM, EU, EMEA, APAC, Oceania, Russia, Antarctica). Click a country (or a bundle, which queues each member sequentially) and PrepperPi extracts just that region's PMTiles directly out of the [mapterhorn.com](https://download.mapterhorn.com/) daily planet via HTTP range requests — no full-planet download required. Pre-flight free-space check, live progress, cancel button. One install at a time
 - ✅ **Content bundles** — curated YAML manifests (Kiwix ZIMs + map regions + optional static files) installable in one click from the admin console's Bundles page. Four official bundles ship in the image (Starter, Complete, Medical, Education); additional bundles can be hosted by anyone — point your Pi at a community-managed source URL from the admin console. See [`docs/creating-bundles.md`](docs/creating-bundles.md) for the schema and how to author your own. Backed by the [`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles) repo
+- ✅ **Update notifier** — admin console's Updates page (and a global nav badge) surfaces ZIMs, map regions, bundle manifests, and bundle static files that have newer versions upstream. Auto-checks every 6 h and on uplink-up via a NetworkManager dispatcher hook; "Check now" button for on-demand. Per-item Update / Pin / Unpin; ZIMs install side-by-side by default, with a "delete old, then update" path for tight-storage cases (no automatic rollback in that path — surfaced in the confirm dialog). Map regions re-extract in place. Bundles refresh from their source repo.
 
 **Not yet shipped (planned):**
 
 - Optional offline place-name search and routing
-- Update notifier (badge in the admin when new ZIM versions or bundle revisions are available)
 - Config export, backup to USB
 - Signed release images, auto-generated release notes
 
@@ -198,7 +198,7 @@ how to author your own without forking.
 
 **Phase 2 — Content and maps.** ⏳ **Mostly shipped.** Kiwix library serving ✅, USB content hosting ✅, live dashboard with event toasts ✅, ZIM catalog selector ✅, offline vector tile server ✅, **map region downloader ✅**. Still ahead: optional offline place-name search and routing.
 
-**Phase 3 — Admin console and updates.** ⏳ **Mostly shipped.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅, **one-click content bundles ✅**. Still ahead: update notifier.
+**Phase 3 — Admin console and updates.** ✅ **Shipped.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅, **one-click content bundles ✅**, **update notifier ✅**.
 
 **Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
 
@@ -212,6 +212,8 @@ Possible futures (not committed): non-Pi SBC support, an optional offline LLM as
 - **Online mode is Ethernet-only by design.** No Wi-Fi role-swap on the onboard radio (avoids dropping the AP). A USB Wi-Fi dongle would let the Pi be a Wi-Fi client *and* keep the AP up — that's a stretch story, not shipped.
 - **No content downloader UI.** Today you supply ZIMs by `cp` over SSH or by dropping them onto a USB. An in-browser catalog selector is on the roadmap.
 - **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are Phase 4.
+- **Some ZIM index pages have visible category lists with no clickable links.** WikEM's "Notes by Categories", Art of Problem Solving's main page, and a handful of other wiki-derived ZIMs render their index as plain text (`<li>Cardiology (304 pages)</li>`) instead of links. The articles themselves are present in the ZIM — use the kiwix search box at the top of the viewer to jump to any title. The cause is upstream: Kiwix's `mwoffliner` scraper couldn't render the live MediaWiki category template at scrape time and fell back to a flat text dump. Re-scraping with a complete template would fix it but happens at the source, not on the appliance.
+- **PDF rendering on Chrome for Android always downloads.** Chrome on Android has no built-in PDF viewer, so it always downloads regardless of `Content-Disposition: inline`. Workarounds: install a PDF viewer app (Adobe Reader, Google PDF Viewer) and tap the downloaded file, or switch browsers — Firefox for Android renders PDFs inline once you cancel the initial "Open with…" prompt. Desktop Chrome / Firefox / Edge / Safari and iOS Safari all render kiwix-served PDFs inline natively.
 
 ## Licensing
 

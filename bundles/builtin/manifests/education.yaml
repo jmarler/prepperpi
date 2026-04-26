@@ -1,19 +1,28 @@
 id: education
 name: Education
 description: |
-  Educational content for kids and adults — Wikipedia (in the language of
-  your choice), Khan Academy Lite, and Project Gutenberg. Pairs well with
-  a household library on a single Pi.
+  Educational content sized for a household library — a key-articles
+  Wikipedia, Wikibooks textbooks, the medical subset, Appropedia, and
+  a Project Gutenberg literature slice. Roughly 16 GB.
 license_notes: |
-  Khan Academy is CC BY-NC-SA. Personal and educational use only —
-  commercial redistribution is not permitted.
+  Wikibooks and Wikipedia are CC BY-SA. Project Gutenberg is mostly
+  public-domain US-published works; check each book's individual notice.
 
 items:
+  # Wikipedia — "all" mini flavor, key articles only, no images.
+  # ~11 GB. Drop in `wikipedia_en_all_nopic` (~48 GB) if you want the
+  # broader English Wikipedia and have the disk space.
   - kind: zim
-    book_id: wikipedia_en_all
+    book_id: wikipedia_en_all_mini
 
+  # Wikibooks — open textbooks across science, math, humanities. ~3 GB.
   - kind: zim
-    book_id: khanacademy_en_all
+    book_id: wikibooks_en_all_nopic
 
+  # Wikipedia's medical subset, no images. ~800 MB.
   - kind: zim
-    book_id: gutenberg_en_all
+    book_id: wikipedia_en_medicine_nopic
+
+  # Appropedia — sustainable / appropriate-technology wiki.
+  - kind: zim
+    book_id: appropedia_en_all

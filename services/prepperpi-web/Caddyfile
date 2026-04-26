@@ -145,9 +145,41 @@
 		# on 127.0.0.1:8088. kiwix-serve was launched with
 		# `--urlRoot=/library`, so it expects the prefix to arrive
 		# intact -- no rewrite needed.
+		#
+		# PDF / EPUB assets get `Content-Disposition: inline` so the
+		# browser renders them in-tab instead of triggering a save
+		# dialog. kiwix-serve sets the right Content-Type but no
+		# disposition; without an explicit `inline` hint, browsers
+		# with an "always download" setting (or no built-in viewer,
+		# e.g. Chrome on Android) treat the body as an attachment.
+		# Path-based match is safe because the affected ZIMs (zimgit-*,
+		# survivorlibrary, etc.) use the literal `.pdf` / `.epub`
+		# extension in their URLs.
+		@library_inline path_regexp library_inline ^/library/.+\.(pdf|epub)$
+		handle @library_inline {
+			header Content-Disposition "inline"
+			reverse_proxy 127.0.0.1:8088
+		}
 		@library path /library /library/*
 		handle @library {
-			reverse_proxy 127.0.0.1:8088
+			# kiwix-serve emits a CSP with a `sandbox` directive on
+			# every HTML response. Intent: constrain ZIM-internal
+			# scripts (mwoffliner output ships with `unsafe-inline`
+			# and `unsafe-eval` permissions). Side-effect: sandbox
+			# propagates to user clicks on in-ZIM PDF / EPUB links,
+			# breaking inline viewers everywhere -- Chrome desktop
+			# blocks the navigation outright, Safari opens an empty
+			# tab, Firefox Android bounces to "open with" before
+			# falling back. We strip the CSP entirely; the Pi is
+			# offline-only and access is gated to the AP subnet at
+			# the Caddy layer above, so in-ZIM XHR escapes aren't a
+			# real attack surface. (Trying to keep just the
+			# `default-src` half via header_down replace doesn't
+			# work cleanly across Caddy versions -- delete-then-add
+			# in the same block leaves the header missing.)
+			reverse_proxy 127.0.0.1:8088 {
+				header_down -Content-Security-Policy
+			}
 		}
 
 		# ---- 2c. Maps (tileserver-gl-light data plane) ----

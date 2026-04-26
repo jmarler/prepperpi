@@ -1,0 +1,32 @@
+[Unit]
+Description=PrepperPi — refresh update-availability snapshot
+Documentation=https://github.com/jmarler/prepperpi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=prepperpi-admin
+Group=prepperpi-admin
+ExecStart=/usr/bin/python3 /opt/prepperpi/services/prepperpi-admin/prepperpi-updates-check
+# Cap wall-time so a slow upstream can't pin the worker forever. The
+# detection pass HEADs every region source (8 by default) and refetches
+# every cached manifest; well under 5 minutes in practice.
+TimeoutStartSec=300
+
+# Same sandboxing as the admin service. Inherits the prepperpi-admin
+# user's filesystem reach: writes only to /var/lib/prepperpi/updates.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin /opt/prepperpi/bundles /etc/prepperpi/bundles /srv/prepperpi
+ReadWritePaths=/var/lib/prepperpi/updates
+LockPersonality=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
