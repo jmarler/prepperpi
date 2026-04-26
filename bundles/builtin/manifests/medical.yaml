@@ -7,9 +7,9 @@ description: |
 
 items:
   - kind: zim
-    book_id: wikem_en_all_maxi
+    book_id: wikem_en_all
 
   # Wikipedia's medical subset — much smaller than full Wikipedia, focused
   # on conditions, treatments, anatomy, and pharmacology.
   - kind: zim
-    book_id: wikipedia_en_medicine_maxi
+    book_id: wikipedia_en_medicine

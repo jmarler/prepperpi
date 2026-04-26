@@ -12,17 +12,17 @@ license_notes: |
 items:
   # Medical reference — small, broadly useful, public-domain-friendly.
   - kind: zim
-    book_id: wikem_en_all_maxi          # Wiki Med Project, full
+    book_id: wikem_en_all
 
   # Repair guides — iFixit, BY-NC-SA.
   - kind: zim
-    book_id: ifixit_en_all              # iFixit, all categories
+    book_id: ifixit_en_all
 
-  # First aid / survival reference — public-domain US Army field manuals.
-  # (FM-21-76 etc. are public domain; a Kiwix archive of them is shipped
-  # under `gutenberg_en_all` for the Gutenberg-mirrored ones.)
+  # First aid / survival reference. Project Gutenberg holds the
+  # Kearny "Nuclear War Survival Skills" mirror and many US Army
+  # field manuals (FM 21-76 etc.) as public-domain texts.
   - kind: zim
-    book_id: gutenberg_en_all           # Project Gutenberg, complete
+    book_id: gutenberg_en_all
 
   # Offline maps — North America bundle covers US/CA/MX in one queue.
   - kind: map_region

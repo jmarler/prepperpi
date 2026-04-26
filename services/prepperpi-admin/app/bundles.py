@@ -350,8 +350,16 @@ def resolve_bundle(
     `region_catalog` is the parsed region catalog from
     prepperpi-tiles/regions.json.
     """
+    # The shipped catalog uses `countries` as the key; older drafts
+    # used `regions`. Accept either so manifests are forward-compatible
+    # if the catalog format ever changes.
+    catalog_entries = (
+        region_catalog.get("countries")
+        or region_catalog.get("regions")
+        or []
+    )
     region_lookup: dict[str, dict] = {
-        r.get("id", ""): r for r in (region_catalog.get("regions") or [])
+        r.get("id", ""): r for r in catalog_entries
     }
 
     total = 0
