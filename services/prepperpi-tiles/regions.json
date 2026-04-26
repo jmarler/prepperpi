@@ -1,5 +1,5 @@
 {
-  "_comment": "Map region catalog for E3-S2. Each `country` is one extractable region from the planet PMTiles source; `bundles` group countries into one-click installs. bbox is [west, south, east, north] in WGS84. estimated_bytes is a calibrated estimate (~density × area) used for AC-2 size display and AC-4 free-space warning; expect ±50% accuracy.",
+  "_comment": "Map region catalog for E3-S2. Each `country` is one extractable region from the planet PMTiles source; `bundles` group countries into one-click installs. bbox is [west, south, east, north] in WGS84. estimated_bytes is a rough estimate used for AC-2 size display and AC-4 free-space warning. Calibration is poor for large dense regions on Protomaps schema (US measured ~18 GB vs catalog 1.5 GB), better for small countries. Expect ±50% for ≤50 MB extracts, ±10× for continent-sized ones — until a maintainer-side recalibration pass refreshes these.",
   "version": 1,
   "source_url": "https://build.protomaps.com/{date}.pmtiles",
   "source_attribution": "© OpenStreetMap contributors; daily planet PMTiles built and hosted by Protomaps. https://protomaps.com",
@@ -38,8 +38,8 @@
     {"id": "antarctica", "name": "Antarctica",  "countries": ["AQ"]}
   ],
   "countries": [
-    {"id": "US", "name": "United States (continental)", "bbox": [-125.0, 24.4, -66.9, 49.4], "estimated_bytes": 1500000000},
-    {"id": "CA", "name": "Canada",                      "bbox": [-141.0, 41.7, -52.6, 70.0], "estimated_bytes": 900000000},
+    {"id": "US", "name": "United States (continental)", "bbox": [-125.0, 24.4, -66.9, 49.4], "estimated_bytes": 18000000000},
+    {"id": "CA", "name": "Canada",                      "bbox": [-141.0, 41.7, -52.6, 70.0], "estimated_bytes": 10000000000},
 
     {"id": "MX", "name": "Mexico",                "bbox": [-118.6, 14.5, -86.7, 32.7], "estimated_bytes": 350000000},
     {"id": "GT", "name": "Guatemala",             "bbox": [-92.3, 13.7, -88.2, 17.8], "estimated_bytes": 22000000},

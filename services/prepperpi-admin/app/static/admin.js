@@ -742,12 +742,36 @@
         activeRegion = s.region_id;
         installCard.hidden = false;
         installNameEl.textContent = s.name || s.region_id;
-        installLabelEl.textContent = statusName === "starting" ? "Starting…" : "Extracting";
-        var done = s.bytes_so_far || 0;
-        var est = s.estimated_bytes || 0;
+
+        // Phase label: pmtiles spends a non-trivial chunk of time in
+        // its directory-fetch phase before any byte is downloaded; the
+        // worker reports phase="planning" then "downloading" then
+        // "verifying" so we can show the user what's actually
+        // happening (otherwise a 5-minute "0 B" stretch looks frozen).
+        var phase = s.phase || "";
+        var label = "Extracting";
+        if (statusName === "starting") label = "Starting…";
+        else if (phase === "planning")    label = "Planning download…";
+        else if (phase === "downloading") label = "Downloading";
+        else if (phase === "verifying")   label = "Verifying";
+        installLabelEl.textContent = label;
+
+        // Prefer the parsed pmtiles total; fall back to the catalog
+        // estimate. The catalog estimate is rough (±50%, sometimes much
+        // worse for big regions) so the parsed total is far more accurate.
+        var done  = s.bytes_so_far || 0;
+        var total = s.bytes_total || s.estimated_bytes || 0;
+        var eta   = s.eta_seconds || 0;
+        var etaText = "";
+        if (eta > 0) {
+          if (eta >= 3600)      etaText = " · ETA " + Math.floor(eta / 3600) + "h " + Math.floor((eta % 3600) / 60) + "m";
+          else if (eta >= 60)   etaText = " · ETA " + Math.floor(eta / 60) + "m " + (eta % 60) + "s";
+          else                  etaText = " · ETA " + eta + "s";
+        }
         installProgEl.textContent = humanSize(done)
-          + (est > 0 ? " / ~" + humanSize(est) : " / unknown");
-        var pct = (est > 0) ? Math.min(100, Math.round((done / est) * 100)) : 0;
+          + (total > 0 ? " / " + humanSize(total) : " / unknown")
+          + etaText;
+        var pct = (total > 0) ? Math.min(100, Math.round((done / total) * 100)) : 0;
         installBarEl.style.width = pct + "%";
         installCancelEl.disabled = false;
       } else {

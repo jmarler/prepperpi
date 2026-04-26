@@ -39,19 +39,32 @@ mkdir -p "$STATUS_DIR" "$TMP_DIR"
 TMP_FILE="${TMP_DIR}/${REGION_ID}.pmtiles.partial"
 FINAL_FILE="${MAPS_DIR}/${REGION_ID}.pmtiles"
 
-# write_status STATUS [progress_bytes]
-# Atomic-write the current.json file.
+# write_status STATUS [bytes_so_far] [bytes_total] [phase] [eta_seconds]
+# Atomic-write the current.json file. Optional fields are filled with
+# defaults; bytes_total falls back to the catalog estimate so the UI
+# always has something to render the bar against.
 write_status() {
-  local status="$1" bytes_so_far="${2:-0}"
-  python3 - "$status" "$bytes_so_far" <<PY
+  local status="$1"
+  local bytes_so_far="${2:-0}"
+  local bytes_total="${3:-0}"
+  local phase="${4:-}"
+  local eta_seconds="${5:-0}"
+  python3 - "$status" "$bytes_so_far" "$bytes_total" "$phase" "$eta_seconds" <<PY
 import json, os, sys, time
-status, bytes_so_far = sys.argv[1], int(sys.argv[2])
+status      = sys.argv[1]
+bytes_done  = int(sys.argv[2])
+bytes_total = int(sys.argv[3])
+phase       = sys.argv[4]
+eta_seconds = int(sys.argv[5])
 out = {
     "region_id": "${REGION_ID}",
     "name": "${REGION_NAME:-${REGION_ID}}",
     "status": status,
     "estimated_bytes": ${EST_BYTES:-0},
-    "bytes_so_far": bytes_so_far,
+    "bytes_so_far": bytes_done,
+    "bytes_total": bytes_total or ${EST_BYTES:-0},
+    "phase": phase,
+    "eta_seconds": eta_seconds,
     "pid": ${WORKER_PID:-0},
     "started_at": ${STARTED_AT:-0},
     "updated_at": int(time.time()),
@@ -63,18 +76,81 @@ os.replace(tmp, "${STATUS_FILE}")
 PY
 }
 
+# Parse pmtiles' own progress output from the log file. Returns
+# `bytes_so_far|bytes_total|phase|eta_seconds` (pipe-separated) on
+# stdout. Empty fields when not available.
+#
+# pmtiles emits to stderr (we tee to LOG_FILE):
+#   "fetching N dirs, ..."                          ← directory phase
+#   "Region tiles X, result tile entries Y"        ← end of planning
+#   "fetching N tiles, N chunks, N requests"       ← about to download
+#   "fetching chunks 29% |...| (5.3/18 GB, 36 MB/s) [2m34s:5m40s]"  ← live
+#   "Completed in Xs ..."                          ← done
+#
+# Progress lines use carriage returns (in-place updates), so we
+# normalize CR → LF before grep.
+parse_pmtiles_progress() {
+  [[ -s "$LOG_FILE" ]] || { echo "0|0||0"; return; }
+  python3 - "$LOG_FILE" <<'PY'
+import re, sys
+log = open(sys.argv[1], "r", errors="replace").read().replace("\r", "\n")
+
+unit = {"B": 1, "kB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 1000**4}
+def b(num, u): return int(round(float(num) * unit.get(u, 1)))
+
+bytes_so_far = bytes_total = eta = 0
+phase = ""
+
+# Find the LAST "fetching chunks ..." line — that's the live progress.
+# pmtiles formats the in-flight numbers two ways depending on units:
+#   "(1020 MB/18 GB, ...)"   when done and total have different units
+#   "(9.6/18 GB, ...)"       when both share the same unit (compact)
+# So the first unit is optional; when missing it's implicitly the
+# second unit's value.
+m = None
+for hit in re.finditer(
+    r"fetching chunks\s+(\d+)%\s*\|[^|]*\|\s*\(([\d.]+)(?:\s*([kMGT]?B))?\s*/\s*([\d.]+)\s*([kMGT]?B)[^)]*\)\s*\[(?:[^:]+):([^\]]+)\]",
+    log,
+):
+    m = hit
+if m:
+    pct = int(m.group(1))
+    first_unit = m.group(3) or m.group(5)   # fallback to total's unit
+    bytes_so_far = b(m.group(2), first_unit)
+    bytes_total  = b(m.group(4), m.group(5))
+    eta_str = m.group(6).strip()
+    # ETA is e.g. "5m40s", "32s", "1h2m". Convert to seconds.
+    secs = 0
+    for n, u in re.findall(r"(\d+)([hms])", eta_str):
+        secs += int(n) * {"h": 3600, "m": 60, "s": 1}[u]
+    eta = secs
+    phase = "downloading"
+elif re.search(r"Completed in", log):
+    phase = "verifying"
+elif re.search(r"fetching \d+ tiles, \d+ chunks", log):
+    phase = "downloading"
+elif re.search(r"Region tiles \d+", log):
+    phase = "planning"
+elif re.search(r"fetching \d+ dirs", log):
+    phase = "planning"
+
+print(f"{bytes_so_far}|{bytes_total}|{phase}|{eta}")
+PY
+}
+
 cleanup() {
   local exit_code=$?
   rm -f "$TMP_FILE"
   rm -f "$LOCK_FILE"
   if [[ "$exit_code" -ne 0 && "${WROTE_TERMINAL_STATUS:-no}" != "yes" ]]; then
-    write_status "failed" "$(stat -c%s "$TMP_FILE" 2>/dev/null || echo 0)"
+    write_status "failed" 0 0 "" 0
   fi
 }
 
 handle_signal() {
   WROTE_TERMINAL_STATUS=yes
-  write_status "cancelled" "$(stat -c%s "$TMP_FILE" 2>/dev/null || echo 0)"
+  IFS='|' read -r bytes_so_far bytes_total _ _ < <(parse_pmtiles_progress)
+  write_status "cancelled" "${bytes_so_far:-0}" "${bytes_total:-0}" "" 0
   rm -f "$TMP_FILE"
   rm -f "$LOCK_FILE"
   exit 130
@@ -160,13 +236,15 @@ write_status "extracting"
     > "$LOG_FILE" 2>&1 &
 EXTRACT_PID=$!
 
-# Poll loop: every second, read partial-file size and update status.
-# The tool may overshoot or undershoot the estimate by a fair margin —
-# the UI uses bytes_so_far as the truthful "progress so far" value.
+# Poll loop: every second, parse pmtiles' own progress from the log
+# (NOT the partial file size — pmtiles preallocates the full target
+# size on disk, so stat -c%s is constant throughout the download).
+# Falls back to a "planning" phase status while pmtiles is still
+# walking the directory tree before any chunk fetch starts.
 while kill -0 "$EXTRACT_PID" 2>/dev/null; do
   sleep 1
-  bytes_so_far=$(stat -c%s "$TMP_FILE" 2>/dev/null || echo 0)
-  write_status "extracting" "$bytes_so_far"
+  IFS='|' read -r bytes_so_far bytes_total phase eta_seconds < <(parse_pmtiles_progress)
+  write_status "extracting" "${bytes_so_far:-0}" "${bytes_total:-0}" "${phase:-}" "${eta_seconds:-0}"
 done
 
 # Reap the extract process and capture its exit code.
@@ -176,7 +254,8 @@ EXTRACT_RC=$?
 if [[ "$EXTRACT_RC" -ne 0 ]]; then
   echo "[extract-region] pmtiles exited with code ${EXTRACT_RC}; see ${LOG_FILE}" >&2
   WROTE_TERMINAL_STATUS=yes
-  write_status "failed" "$(stat -c%s "$TMP_FILE" 2>/dev/null || echo 0)"
+  IFS='|' read -r bytes_so_far bytes_total _ _ < <(parse_pmtiles_progress)
+  write_status "failed" "${bytes_so_far:-0}" "${bytes_total:-0}" "" "0"
   exit "$EXTRACT_RC"
 fi
 
@@ -186,7 +265,7 @@ fi
 if [[ ! -s "$TMP_FILE" ]] || ! head -c 8 "$TMP_FILE" | grep -q '^PMTiles'; then
   echo "[extract-region] extracted file failed PMTiles magic check" >&2
   WROTE_TERMINAL_STATUS=yes
-  write_status "failed" "$(stat -c%s "$TMP_FILE" 2>/dev/null || echo 0)"
+  write_status "failed" 0 0 "" 0
   exit 5
 fi
 
@@ -195,6 +274,7 @@ fi
 # the tileserver restarts. ~5s end to end.
 mv -f "$TMP_FILE" "$FINAL_FILE"
 
+final_size=$(stat -c%s "$FINAL_FILE" 2>/dev/null || echo 0)
 WROTE_TERMINAL_STATUS=yes
-write_status "complete" "$(stat -c%s "$FINAL_FILE" 2>/dev/null || echo 0)"
+write_status "complete" "$final_size" "$final_size" "" 0
 exit 0
