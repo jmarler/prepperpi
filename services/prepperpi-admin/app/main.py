@@ -24,9 +24,10 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -65,6 +66,9 @@ ALLOWED_COUNTRIES = sorted([
     "TR", "TW", "UA", "US", "VN", "ZA",
 ])
 
+# Mirrored from apply-network-config. Keep in sync; the wrapper is canonical.
+FCC_COUNTRIES = frozenset({"US", "CA", "MX"})
+
 # Mirrored from the wrapper. Keep in sync; the wrapper is canonical.
 SSID_RE = re.compile(r"^[A-Za-z0-9 \-_.()\[\]]{1,32}$")
 WIFI_PASSWORD_RE = re.compile(r"^[\x20-\x7e]{0,63}$")
@@ -73,6 +77,35 @@ WIFI_PASSWORD_RE = re.compile(r"^[\x20-\x7e]{0,63}$")
 app = FastAPI(title="PrepperPi Admin", docs_url=None, redoc_url=None)
 app.mount("/admin/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+@app.middleware("http")
+async def csrf_origin_guard(request: Request, call_next):
+    # The admin console has no authentication; the Caddy network ACL
+    # is the only access gate. That gate passes any request whose
+    # client IP is on the AP subnet -- including a request that a
+    # *victim's* browser auto-submitted because it was lured to an
+    # off-network attacker's page. Compare Origin (or Referer if
+    # Origin is absent) against this request's own Host so that
+    # browser-driven cross-origin mutations are rejected. Non-browser
+    # callers (curl, scripts) typically omit both headers; we let
+    # those through, since the AP-subnet attacker that could send
+    # them already has direct ACL-passing access and gains nothing
+    # from CSRF.
+    if request.method in _MUTATING_METHODS:
+        host = request.headers.get("host", "")
+        source = request.headers.get("origin") or request.headers.get("referer")
+        if source:
+            parsed = urlparse(source)
+            if parsed.netloc != host:
+                return PlainTextResponse(
+                    "cross-origin request blocked",
+                    status_code=403,
+                )
+    return await call_next(request)
 
 
 def read_config() -> dict[str, str]:
@@ -124,16 +157,25 @@ def validate_locally(spec: dict) -> list[str]:
         errors.append("Wi-Fi password contains characters that aren't allowed.")
 
     channel = spec.get("channel", "auto")
+    ch_int: Optional[int] = None
     if channel != "auto":
         try:
-            ch = int(channel)
-            if not (1 <= ch <= 13):
+            ch_int = int(channel)
+            if not (1 <= ch_int <= 13):
                 errors.append("Channel must be Auto or 1-13.")
+                ch_int = None
         except (TypeError, ValueError):
             errors.append("Channel must be Auto or 1-13.")
 
-    if spec.get("country") not in ALLOWED_COUNTRIES:
+    country = spec.get("country")
+    if country not in ALLOWED_COUNTRIES:
         errors.append("Country must be a supported ISO code.")
+
+    if ch_int is not None and country in FCC_COUNTRIES and ch_int > 11:
+        errors.append(
+            f"Channel {ch_int} is not allowed in {country}; "
+            f"that regulatory domain restricts 2.4 GHz to channels 1-11."
+        )
 
     return errors
 

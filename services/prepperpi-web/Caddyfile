@@ -104,6 +104,13 @@
 		handle @admin {
 			@admin_allowed remote_ip 10.42.0.0/24 127.0.0.1/32 ::1/128
 			handle @admin_allowed {
+				# E4-S4 AC-5 — clickjack / MIME / referrer hardening.
+				# DENY blocks iframe embedding entirely; nosniff stops
+				# content-type sniffing; same-origin keeps admin URLs
+				# from leaking via Referer to outbound links.
+				header X-Frame-Options "DENY"
+				header X-Content-Type-Options "nosniff"
+				header Referrer-Policy "same-origin"
 				reverse_proxy 127.0.0.1:8090
 			}
 			respond "Forbidden — admin console is reachable only from the PrepperPi Wi-Fi network." 403 {

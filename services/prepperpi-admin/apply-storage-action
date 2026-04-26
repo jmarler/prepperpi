@@ -30,6 +30,10 @@ from pathlib import Path
 
 USB_BASE = Path("/srv/prepperpi/user-usb")
 
+# Hard cap on the JSON payload we'll read from stdin. Mirrors the
+# cap in apply-network-config; same rationale.
+MAX_STDIN_BYTES = 1 << 20  # 1 MiB
+
 # Same allowlist that prepperpi-usb-mount.sh's `sanitize` function emits.
 NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
@@ -116,8 +120,17 @@ def remount(path: Path, writable: bool) -> None:
 
 
 def main() -> int:
+    # Refuse TTY stdin (confused-deputy) and cap the payload size so a
+    # caller can't wedge us by holding the pipe open. Same contract as
+    # apply-network-config.
+    if sys.stdin.isatty():
+        sys.stderr.write("refusing to read JSON payload from a TTY\n")
+        return 2
     try:
-        raw = sys.stdin.read()
+        raw = sys.stdin.read(MAX_STDIN_BYTES + 1)
+        if len(raw) > MAX_STDIN_BYTES:
+            sys.stderr.write(f"payload exceeds {MAX_STDIN_BYTES} bytes\n")
+            return 2
         spec = json.loads(raw)
     except json.JSONDecodeError as exc:
         sys.stderr.write(f"invalid JSON on stdin: {exc}\n")

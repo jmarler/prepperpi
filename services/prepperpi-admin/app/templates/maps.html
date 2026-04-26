@@ -103,7 +103,7 @@
       </td>
       <td>
         <form method="post" action="/admin/maps/{{ r.region_id }}/delete"
-              onsubmit="return confirm('Delete region “{{ r.name|e }}”? This removes the file from disk.');">
+              data-confirm="Delete region “{{ r.name }}”? This removes the file from disk.">
           <button type="submit" class="admin-btn admin-btn--danger">Delete</button>
         </form>
       </td>

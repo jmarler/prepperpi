@@ -885,4 +885,21 @@
       }
     });
   })();
+
+  // ---------- Block 5: data-confirm submit guard ----------
+  // Forms that mutate state can carry data-confirm="…" to prompt the
+  // user before submission. The message is read from the attribute via
+  // dataset, which decodes HTML entities to plain text — so values
+  // interpolated into the attribute by Jinja are safe (HTML-autoescaped
+  // in attribute context, never evaluated as JS). This replaces inline
+  // onsubmit="confirm('… {{ x }} …')" usage, which was vulnerable to
+  // JS-string-context breakout when the interpolated value contained
+  // single quotes.
+  document.addEventListener("submit", function (e) {
+    var form = e.target;
+    if (!form || !form.dataset || !form.dataset.confirm) return;
+    if (!confirm(form.dataset.confirm)) {
+      e.preventDefault();
+    }
+  });
 })();
