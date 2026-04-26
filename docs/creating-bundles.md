@@ -167,10 +167,28 @@ Surface this clearly so users don't accidentally violate it.
 ## Validating a manifest
 
 The appliance JSON-schema-validates manifests at install time and
-shows specific errors for each problem. To pre-flight locally, the
-unit-test suite in PrepperPi's repo (`tests/unit/test_admin_bundles.py`)
-exercises the schema; you can use it as a reference for what gets
-accepted vs. rejected.
+shows specific errors for each problem. To pre-flight locally, use the
+standalone validator that ships in the
+[`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles)
+repo under `tools/bundles-validate`:
 
-A standalone CLI validator + a GitHub Action you can drop into your
-bundle repo are planned.
+```bash
+git clone https://github.com/jmarler/prepperpi-bundles
+cd prepperpi-bundles
+pip install pyyaml      # only stdlib + pyyaml required
+
+python3 tools/bundles-validate path/to/your/manifests/
+python3 tools/bundles-validate \
+    --catalog kiwix-catalog.json \
+    --regions regions.json \
+    path/to/your/manifests/
+```
+
+`--catalog` and `--regions` take JSON snapshots of the Kiwix catalog
+and `regions.json` and additionally check that every `book_id` and
+`region_id` actually resolves.
+
+The same script is wrapped by a ready-to-copy GitHub Action workflow at
+`.github/workflows/validate.yml` in that repo — fork it (or copy the
+two files) into your own bundle repository and PRs against `manifests/`
+will be schema-checked automatically.
