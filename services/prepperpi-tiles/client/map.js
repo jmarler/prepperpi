@@ -102,20 +102,39 @@
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-left");
 
-    // If the style declared a constraint envelope, snap to it on first
-    // render — gives the user "your installed regions fit to screen"
-    // instead of an arbitrary world view.
-    var maxBounds = styleSpec.max_bounds;
-    if (Array.isArray(maxBounds) && maxBounds.length === 4) {
+    // Snap to the LARGEST installed region on first render. AC-1 says
+    // "largest installed region, centered on the metadata-defined
+    // origin" — and unioning bounds across far-apart regions zooms
+    // out so far that nothing is visible (e.g. Belize + Vatican
+    // spans the Atlantic; at that zoom both are sub-pixel and the
+    // user sees just background-color, looking like "no map").
+    // Pick the source with the largest bbox area; user can pan to
+    // others.
+    var biggest = pickLargestSourceBbox(styleSpec.sources);
+    if (biggest) {
       map.once("load", function () {
         try {
           map.fitBounds(
-            [[maxBounds[0], maxBounds[1]], [maxBounds[2], maxBounds[3]]],
-            { padding: 24, animate: false, maxZoom: 8 }
+            [[biggest[0], biggest[1]], [biggest[2], biggest[3]]],
+            { padding: 24, animate: false, maxZoom: 10 }
           );
         } catch (_) { /* fall back to the style's own center/zoom */ }
       });
     }
+  }
+
+  function pickLargestSourceBbox(sources) {
+    var best = null;
+    var bestArea = 0;
+    if (!sources) return null;
+    for (var k in sources) {
+      if (!Object.prototype.hasOwnProperty.call(sources, k)) continue;
+      var b = sources[k] && sources[k].bounds;
+      if (!Array.isArray(b) || b.length !== 4) continue;
+      var area = (b[2] - b[0]) * (b[3] - b[1]);
+      if (area > bestArea) { bestArea = area; best = b; }
+    }
+    return best;
   }
 
   function fetchAndInit() {
