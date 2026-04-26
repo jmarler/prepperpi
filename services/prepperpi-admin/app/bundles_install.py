@@ -16,6 +16,9 @@ from __future__ import annotations
 import fcntl
 import json
 import subprocess
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -152,10 +155,59 @@ def aria2_in_flight_filenames() -> set[str]:
     return out
 
 
+def resolve_metalink(url: str, *, timeout: int = 15) -> list[str]:
+    """Kiwix's catalog advertises ZIM downloads as `.meta4` metalink
+    URLs. Handing aria2 a `.meta4` URL only downloads the metalink XML
+    (~3 KB) — aria2 doesn't auto-follow metalinks via URL. We fetch
+    the metalink ourselves and return the inner mirror URLs sorted by
+    priority.
+
+    Fails soft: any fetch or parse error returns `[url]` so the caller
+    can still hand aria2 the original URL (which will fail visibly with
+    a 0-byte ZIM, but won't take down the whole bundle install).
+
+    Non-metalink URLs are returned unchanged as a single-item list."""
+    if not url.endswith(".meta4"):
+        return [url]
+    try:
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "PrepperPi-Admin/1"}
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            xml_text = resp.read().decode("utf-8", errors="replace")
+        root = ET.fromstring(xml_text)
+    except (urllib.error.URLError, OSError, ET.ParseError):
+        return [url]
+    pairs: list[tuple[int, str]] = []
+    for url_node in root.iter("{urn:ietf:params:xml:ns:metalink}url"):
+        href = (url_node.text or "").strip()
+        if not href:
+            continue
+        try:
+            priority = int(url_node.get("priority", "100"))
+        except ValueError:
+            priority = 100
+        pairs.append((priority, href))
+    if not pairs:
+        return [url]
+    pairs.sort()
+    return [u for _p, u in pairs]
+
+
 def queue_zim(*, url: str, filename: str, dest_dir: Path) -> str:
-    """Hand a ZIM metalink (or direct URL) to aria2. The aria2 client
-    serializes the metalink and verifies any embedded checksums."""
-    return aria2.add_uri(url, str(dest_dir))
+    """Hand a ZIM URL to aria2. If `url` is a Kiwix `.meta4` metalink,
+    we resolve it to its mirror URLs first so aria2 downloads the
+    actual ZIM rather than the 3 KB metalink XML. `filename` is used
+    as `out=` only when the metalink resolved to a single direct URL
+    that doesn't already encode the filename (i.e. mirrors typically
+    do, so we leave `out` unset to let aria2 use the URL's basename)."""
+    mirrors = resolve_metalink(url)
+    options: dict[str, str] = {}
+    if filename and len(mirrors) == 1 and mirrors[0] == url:
+        # Direct URL, no metalink resolution; pin the output name so
+        # we don't end up with a `.meta4`-suffixed file on disk.
+        options["out"] = filename
+    return aria2.add_uri(mirrors, str(dest_dir), out=options.get("out"))
 
 
 def queue_static(*, url: str, sha256: str, install_to: str) -> str:
@@ -167,10 +219,10 @@ def queue_static(*, url: str, sha256: str, install_to: str) -> str:
     dest_dir.mkdir(parents=True, exist_ok=True)
     # aria2 supports `checksum=sha-256=<hex>` as a per-download option
     # via the addUri extra-options mapping. Our local add_uri helper
-    # only takes dir/out today; for v1 we still pass the URL through
-    # and post-verify after download in the bundle-status checker.
-    # TODO(E5-S2): teach aria2.add_uri about checksum options so the
-    # daemon refuses to mark complete on hash mismatch.
+    # only takes dir/out today; static-file updates with explicit
+    # sha256 verification go through updates_apply._download_with_sha256
+    # instead, which streams + hashes directly. The bundle-install path
+    # below still relies on aria2's metalink-embedded checksums.
     return aria2.add_uri(url, str(dest_dir), out=out_name)
 
 

@@ -22,6 +22,11 @@
 		<a href="/admin/catalog" {% if active == "catalog" %}aria-current="page" class="admin-nav__active"{% endif %}>Content</a>
 		<a href="/admin/maps" {% if active == "maps" %}aria-current="page" class="admin-nav__active"{% endif %}>Maps</a>
 		<a href="/admin/bundles" {% if active == "bundles" %}aria-current="page" class="admin-nav__active"{% endif %}>Bundles</a>
+		<a href="/admin/updates" {% if active == "updates" %}aria-current="page" class="admin-nav__active"{% endif %}>
+			Updates{% if stale_count and stale_count > 0 %}
+			<span class="admin-nav__badge" aria-label="{{ stale_count }} update(s) available">{{ stale_count }}</span>
+			{% endif %}
+		</a>
 	</nav>
 
 	<main class="admin-main">

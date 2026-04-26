@@ -37,6 +37,9 @@ import bundles_install
 import catalog
 import health
 import maps
+import updates as updates_mod
+import updates_apply
+import updates_state
 from uplink import detect_uplink
 
 APP_DIR = Path(__file__).resolve().parent
@@ -78,7 +81,24 @@ WIFI_PASSWORD_RE = re.compile(r"^[\x20-\x7e]{0,63}$")
 
 app = FastAPI(title="PrepperPi Admin", docs_url=None, redoc_url=None)
 app.mount("/admin/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+def _stale_count_context(request: Request) -> dict:
+    """Make `stale_count` available to every template so the nav-badge
+    renders without each route having to thread it through. A missing
+    or unreadable snapshot reports 0 — better than showing a stale badge
+    forever if the file gets corrupted."""
+    try:
+        snap = updates_state.read_snapshot()
+        return {"stale_count": int(snap.get("stale_count") or 0)}
+    except Exception:
+        return {"stale_count": 0}
+
+
+templates = Jinja2Templates(
+    directory=str(TEMPLATES_DIR),
+    context_processors=[_stale_count_context],
+)
 
 
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -730,52 +750,51 @@ def downloads_queue(
     return {"gid": gid}
 
 
-@app.post("/admin/downloads/{gid}/pause")
-def downloads_pause(gid: str):
-    if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
-        raise HTTPException(status_code=400, detail="invalid gid")
+def _aria2_action_response(request: Request, gid_action) -> dict | RedirectResponse:
+    """Run an aria2 mutation with shared error handling. Negotiates
+    response format: callers asking for JSON (the live-update JS) get
+    `{"ok": True}`; plain form posts get a 303 redirect back to the
+    Catalog page so a no-JS click never hands the user a raw JSON blob."""
     try:
-        aria2.pause(gid)
+        gid_action()
     except aria2.Aria2Error as exc:
         raise HTTPException(status_code=502, detail=str(exc))
-    return {"ok": True}
+    accept = request.headers.get("accept") or ""
+    if "application/json" in accept:
+        return {"ok": True}
+    return RedirectResponse("/admin/catalog", status_code=303)
+
+
+@app.post("/admin/downloads/{gid}/pause")
+def downloads_pause(request: Request, gid: str):
+    if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
+        raise HTTPException(status_code=400, detail="invalid gid")
+    return _aria2_action_response(request, lambda: aria2.pause(gid))
 
 
 @app.post("/admin/downloads/{gid}/resume")
-def downloads_resume(gid: str):
+def downloads_resume(request: Request, gid: str):
     if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
         raise HTTPException(status_code=400, detail="invalid gid")
-    try:
-        aria2.unpause(gid)
-    except aria2.Aria2Error as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-    return {"ok": True}
+    return _aria2_action_response(request, lambda: aria2.unpause(gid))
 
 
 @app.post("/admin/downloads/{gid}/cancel")
-def downloads_cancel(gid: str):
+def downloads_cancel(request: Request, gid: str):
     if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
         raise HTTPException(status_code=400, detail="invalid gid")
-    try:
-        aria2.remove(gid)
-    except aria2.Aria2Error as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-    return {"ok": True}
+    return _aria2_action_response(request, lambda: aria2.remove(gid))
 
 
 @app.post("/admin/downloads/{gid}/clear")
-def downloads_clear(gid: str):
+def downloads_clear(request: Request, gid: str):
     """Clear a finished (complete or error) download from the queue
     history. Different from `cancel` which targets in-flight downloads;
     this just removes the bookkeeping entry. The actual file (if any)
     stays at the destination."""
     if not re.match(r"^[A-Za-z0-9]{1,32}$", gid):
         raise HTTPException(status_code=400, detail="invalid gid")
-    try:
-        aria2.remove_result(gid)
-    except aria2.Aria2Error as exc:
-        raise HTTPException(status_code=502, detail=str(exc))
-    return {"ok": True}
+    return _aria2_action_response(request, lambda: aria2.remove_result(gid))
 
 
 @app.get("/admin/maps", response_class=HTMLResponse)
@@ -1232,3 +1251,241 @@ def bundles_install_endpoint(qualified_id: str):
         f"/admin/bundles?ok=Queued+{summary}",
         status_code=303,
     )
+
+
+# ---------- updates dashboard ----------
+
+
+@app.get("/admin/updates", response_class=HTMLResponse)
+def updates_get(
+    request: Request,
+    ok: Optional[str] = None,
+    err: Optional[str] = None,
+) -> HTMLResponse:
+    snap = updates_state.read_snapshot()
+    flash = None
+    if ok:
+        flash = {"kind": "ok", "message": ok}
+    elif err:
+        flash = {"kind": "error", "message": err}
+    return templates.TemplateResponse(
+        "updates.html",
+        {
+            "request": request,
+            "active": "updates",
+            "snapshot": snap,
+            "flash": flash,
+        },
+    )
+
+
+@app.post("/admin/updates/check")
+def updates_check_now():
+    """In-process check trigger for the "Check now" button."""
+    uplink_ok = bool(detect_uplink().get("ethernet"))
+    snap = updates_state.compute_snapshot(uplink_ok=uplink_ok)
+    updates_state.write_snapshot(snap)
+    if not uplink_ok:
+        return RedirectResponse(
+            "/admin/updates?err=No+Ethernet+uplink+%E2%80%94+plug+in+a+cable+and+retry",
+            status_code=303,
+        )
+    msg = (
+        f"Check complete: {snap['stale_count']} update(s) available, "
+        f"{len(snap.get('errors') or [])} source(s) had errors."
+    ).replace(" ", "+")
+    return RedirectResponse(f"/admin/updates?ok={msg}", status_code=303)
+
+
+@app.post("/admin/updates/apply")
+def updates_apply_endpoint(
+    kind: str = Form(...),
+    item_id: str = Form(...),
+    delete_old: Optional[str] = Form(None),
+):
+    """Apply one update. The route looks up the item in the latest
+    snapshot — we don't trust user-supplied URLs."""
+    snap = updates_state.read_snapshot()
+    item = next(
+        (it for it in snap.get("items") or []
+         if it.get("kind") == kind and it.get("id") == item_id),
+        None,
+    )
+    if item is None:
+        raise HTTPException(status_code=404, detail="update not found in snapshot")
+    if item.get("status") != "stale":
+        raise HTTPException(
+            status_code=409,
+            detail=f"item is {item.get('status')!r}, not stale",
+        )
+
+    try:
+        if kind == "zim":
+            # Prefer the filename the detector identified as the newest
+            # installed copy for this book_id; that's what we'd swap or
+            # remove, not whatever the directory listing happens to put
+            # first. Fall back to a fresh disk lookup for older snapshots
+            # that didn't carry the field.
+            current = item.get("installed_filename") or _installed_zim_filename(item_id)
+            msg = updates_apply.apply_zim_update(
+                book_id=item_id,
+                current_filename=current,
+                new_url=item.get("available_url") or "",
+                new_filename=(item.get("available_name") or "") + ".zim"
+                    if item.get("available_name") else "",
+                delete_old=bool(delete_old),
+            )
+        elif kind == "map_region":
+            msg = updates_apply.apply_region_update(region_id=item_id)
+        elif kind == "bundle":
+            msg = updates_apply.apply_bundle_update(
+                qualified_id=item_id,
+                refresh_callback=_refresh_remote_sources,
+            )
+        elif kind == "static":
+            entry = _static_manifest_entry(item_id)
+            if entry is None:
+                raise updates_apply.UpdateError(
+                    f"No manifest knows about {item_id!r} anymore."
+                )
+            msg = updates_apply.apply_static_update(
+                install_to=entry.install_to,
+                url=entry.url,
+                expected_sha256=entry.expected_sha256,
+                expected_size=entry.expected_size,
+            )
+        else:
+            raise HTTPException(status_code=400, detail=f"unknown kind {kind!r}")
+    except updates_apply.UpdateError as exc:
+        return RedirectResponse(
+            f"/admin/updates?err={_quote_msg(str(exc))}", status_code=303
+        )
+
+    return RedirectResponse(
+        f"/admin/updates?ok={_quote_msg(msg)}", status_code=303
+    )
+
+
+@app.post("/admin/updates/pin")
+def updates_pin(
+    kind: str = Form(...),
+    item_id: str = Form(...),
+):
+    """Pin an item to its currently installed version. The route reads
+    fresh on-disk state to derive the pin handle — that way a
+    drift-since-last-check doesn't get baked in."""
+    store = updates_state.read_pins()
+    if kind == "zim":
+        zf = next(
+            (z for z in updates_state.collect_installed_zims()
+             if z.book_id == item_id),
+            None,
+        )
+        if zf is None:
+            raise HTTPException(status_code=404, detail="installed ZIM not found")
+        store.zims[zf.book_id] = zf.version
+    elif kind == "map_region":
+        sc = next(
+            (s for s in updates_state.collect_region_sidecars()
+             if s.region_id == item_id),
+            None,
+        )
+        if sc is None:
+            raise HTTPException(status_code=404, detail="region sidecar not found")
+        store.regions[sc.region_id] = {
+            "etag": sc.etag,
+            "last_modified": sc.last_modified,
+        }
+    elif kind == "bundle":
+        cached = updates_state.collect_cached_bundle_bodies()
+        body = cached.get(item_id)
+        if body is None:
+            raise HTTPException(status_code=404, detail="cached manifest not found")
+        store.bundles[item_id] = updates_mod.sha256_text(body)
+    elif kind == "static":
+        installed_path = updates_state._resolve_static_install_path(item_id)
+        if installed_path is None or not installed_path.is_file():
+            raise HTTPException(status_code=404, detail="static file not on disk")
+        try:
+            sha = updates_mod.sha256_file(installed_path)
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"hash failed: {exc}")
+        store.statics[item_id] = sha
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown kind {kind!r}")
+    updates_state.write_pins(store)
+    return RedirectResponse(
+        "/admin/updates?ok=Pinned+to+current+version", status_code=303
+    )
+
+
+# Filenames we permit deletion of — Kiwix ZIM convention plus a
+# safety regex that prevents path traversal or hidden-file shenanigans.
+_ZIM_FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,128}\.zim$")
+
+
+@app.post("/admin/zim/{filename}/delete")
+def zim_delete(filename: str):
+    """Unlink a ZIM from /srv/prepperpi/zim/. Filename must be a plain
+    `*.zim` basename (no path separators, no `..`). The kiwix-reindex
+    `.path` unit picks up the directory change and re-indexes."""
+    if not _ZIM_FILENAME_RE.match(filename) or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="invalid filename")
+    path = ZIM_BASE / filename
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return RedirectResponse(
+            f"/admin/updates?err={_quote_msg(f'{filename} was already gone')}",
+            status_code=303,
+        )
+    except OSError as exc:
+        return RedirectResponse(
+            f"/admin/updates?err={_quote_msg(f'Could not delete: {exc}')}",
+            status_code=303,
+        )
+    return RedirectResponse(
+        f"/admin/updates?ok={_quote_msg(f'Deleted {filename}')}",
+        status_code=303,
+    )
+
+
+@app.post("/admin/updates/unpin")
+def updates_unpin(
+    kind: str = Form(...),
+    item_id: str = Form(...),
+):
+    store = updates_state.read_pins()
+    if kind == "zim":
+        store.zims.pop(item_id, None)
+    elif kind == "map_region":
+        store.regions.pop(item_id, None)
+    elif kind == "bundle":
+        store.bundles.pop(item_id, None)
+    elif kind == "static":
+        store.statics.pop(item_id, None)
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown kind {kind!r}")
+    updates_state.write_pins(store)
+    return RedirectResponse("/admin/updates?ok=Unpinned", status_code=303)
+
+
+def _installed_zim_filename(book_id: str) -> Optional[str]:
+    for z in updates_state.collect_installed_zims():
+        if z.book_id == book_id:
+            return z.filename
+    return None
+
+
+def _static_manifest_entry(install_to: str):
+    cached = updates_state.collect_cached_bundle_bodies()
+    for entry in updates_state.collect_static_manifest_entries(cached):
+        if entry.install_to == install_to:
+            return entry
+    return None
+
+
+def _quote_msg(msg: str) -> str:
+    """URL-quote the flash message into a redirect query string."""
+    from urllib.parse import quote
+    return quote(msg, safe="")

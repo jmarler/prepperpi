@@ -16,6 +16,7 @@ Schema reference: see `docs/creating-bundles.md`.
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -307,29 +308,68 @@ def fetch_text(url: str, timeout: int = DEFAULT_FETCH_TIMEOUT) -> str:
 # ---------- ZIM resolver: book_id → catalog entry ----------
 
 
+_KIWIX_FILENAME_DATE_RE = re.compile(
+    r"^(?P<stem>.+?)_(?P<date>\d{4}-\d{2}(?:-\d{2})?)$"
+)
+
+
+def _filename_stem_no_date(filename: str) -> str:
+    """`wikipedia_en_medicine_mini_2026-04.zim` -> `wikipedia_en_medicine_mini`.
+
+    Kiwix's OPDS feed reports the `name` field WITHOUT the flavor
+    suffix (mini/nopic/maxi) — three different books share
+    `name=wikipedia_en_medicine`. The flavor only lives in the URL /
+    filename. To let manifests pin to a specific flavor we match
+    against the date-stripped filename stem too."""
+    if filename.endswith(".zim"):
+        filename = filename[: -len(".zim")]
+    m = _KIWIX_FILENAME_DATE_RE.match(filename)
+    if m:
+        return m.group("stem")
+    return filename
+
+
 def find_kiwix_book(books: list[dict], book_id: str) -> Optional[dict]:
     """Look a bundle's `book_id` up in a Kiwix OPDS catalog entries list.
 
-    Match strategy: the book_id is a stable PREFIX of the catalog entry's
-    `name` field (Kiwix book names carry a date suffix like
-    `wikipedia_en_all_maxi_2024-04`). We pick the entry with the latest
-    `updated` timestamp whose name either equals book_id or starts with
-    `book_id` followed by `_`. This keeps manifests stable across Kiwix
-    updates — manifests reference a logical book, the catalog resolves
-    to the current version.
+    Two-strategy match (a manifest's `book_id` may be either):
 
-    Returns the matching entry dict, or None if no candidate exists.
-    """
-    matches: list[dict] = []
+    1. **Logical name (no flavor)**, e.g. `wikipedia_en_medicine`. We
+       match by `name == book_id` or `name.startswith(book_id + "_")`.
+       This typically returns multiple flavors (mini / nopic / maxi).
+       Whichever has the latest `updated` wins — and ties are broken
+       toward the larger payload, since users picking "no flavor"
+       generally want the richest variant available.
+
+    2. **Flavor-specific filename stem**, e.g.
+       `wikipedia_en_medicine_mini`. We match by the date-stripped
+       filename stem; only the mini variant qualifies. Use this in
+       manifests when size predictability matters.
+
+    Returns the chosen entry, or None if nothing matched."""
+    name_matches = [
+        b for b in books
+        if (b.get("name") or "") == book_id
+        or (b.get("name") or "").startswith(book_id + "_")
+    ]
+    fname_matches: list[dict] = []
     for b in books:
-        name = b.get("name") or ""
-        if name == book_id or name.startswith(book_id + "_"):
-            matches.append(b)
-    if not matches:
+        fn = b.get("filename") or ""
+        if not fn:
+            continue
+        if _filename_stem_no_date(fn) == book_id:
+            fname_matches.append(b)
+
+    # Filename hits are preferred when present — they pin a specific
+    # flavor; the broad name-prefix match only fires as a fallback.
+    chosen_pool = fname_matches if fname_matches else name_matches
+    if not chosen_pool:
         return None
-    # Sort by `updated` desc; missing fields sort to the end.
-    matches.sort(key=lambda b: b.get("updated") or "", reverse=True)
-    return matches[0]
+    chosen_pool.sort(
+        key=lambda b: (b.get("updated") or "", b.get("size_bytes") or 0),
+        reverse=True,
+    )
+    return chosen_pool[0]
 
 
 # ---------- bundle resolution ----------

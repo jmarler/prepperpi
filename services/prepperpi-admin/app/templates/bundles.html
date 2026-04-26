@@ -1,32 +1,32 @@
 {% extends "base.html" %}
 {% block title %}Bundles · Admin · PrepperPi{% endblock %}
 {% block content %}
-<h2>Content bundles</h2>
+<h2 class="admin-page__title">Content bundles</h2>
+<p class="admin-lede">Install a curated set of content with one click.</p>
 
 {% if flash %}
 <div class="flash flash--{{ 'success' if flash.kind == 'ok' else 'error' }}" role="status">{{ flash.message }}</div>
 {% endif %}
 
-<p class="admin-intro">
-  Bundles are curated sets of content (Kiwix ZIMs, map regions, optional
-  static files) that install in one click. The
-  <a href="https://github.com/jmarler/prepperpi-bundles">official bundles</a>
-  ship in your image and update from GitHub when you're online; you can
-  add community-managed sources by editing
-  <code>/etc/prepperpi/bundles/sources.json</code>.
-</p>
-
-<form method="post" action="/admin/bundles/refresh" class="admin-bundles__refresh">
-  <button type="submit" class="admin-btn">Refresh sources</button>
+<div class="admin-bundle-toolbar">
+  <form method="post" action="/admin/bundles/refresh" class="admin-bundle-toolbar__refresh">
+    <button type="submit" class="admin-btn">Refresh sources</button>
+  </form>
   {% if last_refresh %}
-  <span class="admin-bundles__refresh-meta">
+  <span class="admin-bundle-toolbar__meta">
     Last refresh: {{ last_refresh }}
     {% if refresh_errors %}
     · <span class="admin-bundles__error">{{ refresh_errors|length }} source(s) failed</span>
     {% endif %}
   </span>
   {% endif %}
-</form>
+</div>
+
+<div class="admin-callout">
+  <strong>Looking for offline maps?</strong> Maps live on the
+  <a href="/admin/maps">Maps page</a> — pick the country (or countries)
+  you want and PrepperPi extracts just that region.
+</div>
 
 {% if refresh_errors %}
 <details class="admin-bundles__errors">
@@ -46,85 +46,78 @@
 </p>
 {% endif %}
 
+<div class="admin-bundle-grid">
 {% for bundle in bundles %}
-<section class="admin-bundle">
-  <header class="admin-bundle__head">
-    <h3 class="admin-bundle__title">{{ bundle.name }}</h3>
-    <span class="admin-bundle__source">from {{ bundle.source_name }}</span>
+<article class="admin-bundle-card">
+  <header class="admin-bundle-card__head">
+    <h3 class="admin-bundle-card__title">{{ bundle.name }}</h3>
+    <span class="admin-bundle-card__size">
+      {% if bundle.resolved_size_bytes %}{{ format_bytes(bundle.resolved_size_bytes) }}{% else %}—{% endif %}
+    </span>
   </header>
+  <p class="admin-bundle-card__source">From {{ bundle.source_name }} · {{ bundle.items|length }} item(s)</p>
 
-  <p class="admin-bundle__description">{{ bundle.description }}</p>
-
-  {% if bundle.license_notes %}
-  <p class="admin-bundle__license"><strong>License notes:</strong> {{ bundle.license_notes }}</p>
+  {% if bundle.description %}
+  <p class="admin-bundle-card__description">{{ bundle.description }}</p>
   {% endif %}
 
-  <dl class="admin-bundle__stats">
-    <dt>Items</dt><dd>{{ bundle.items|length }}</dd>
-    <dt>Estimated size</dt>
-    <dd>
-      {% if bundle.resolved_size_bytes %}{{ format_bytes(bundle.resolved_size_bytes) }}{% else %}<em>unresolved</em>{% endif %}
-      {% if bundle.resolution_errors %}
-      · <span class="admin-bundle__error">{{ bundle.resolution_errors|length }} item(s) couldn't resolve</span>
-      {% endif %}
-    </dd>
-    <dt>Free on internal storage</dt>
-    <dd>{{ format_bytes(internal_free_bytes) }}</dd>
-  </dl>
-
   {% if bundle.resolution_errors %}
-  <details class="admin-bundle__errors">
-    <summary>Resolution errors ({{ bundle.resolution_errors|length }})</summary>
+  <details class="admin-bundle-card__errors">
+    <summary>{{ bundle.resolution_errors|length }} item(s) couldn't resolve</summary>
     <ul>
       {% for err in bundle.resolution_errors %}<li>{{ err }}</li>{% endfor %}
     </ul>
     {% if catalog_empty %}
-    <p>The Kiwix catalog hasn't been refreshed yet — the appliance can't
-    look up ZIM book IDs. Visit the
+    <p>The Kiwix catalog hasn't been refreshed yet. Visit the
     <a href="/admin/catalog">Content page</a> while online and click
     <strong>Refresh catalog</strong>, then come back here.</p>
     {% endif %}
   </details>
   {% endif %}
 
-  <details class="admin-bundle__items">
-    <summary>Items ({{ bundle.items|length }})</summary>
+  <details class="admin-bundle-card__items">
+    <summary>What's inside</summary>
     <ul>
-      {% for item in bundle.items %}
+      {% for item in bundle.resolved_items %}
       <li>
-        {% if item.kind == "zim" %}
-          <strong>ZIM</strong> · <code>{{ item.book_id }}</code>
-        {% elif item.kind == "map_region" %}
-          <strong>Map region</strong> · <code>{{ item.region_id }}</code>
-        {% elif item.kind == "static" %}
-          <strong>Static</strong> · <code>{{ item.install_to }}</code>
+        {% if item.kind == "zim" %}{{ item.title or item.book_id }}
+        {% elif item.kind == "map_region" %}{{ item.name or item.region_id }} <small>(map)</small>
+        {% elif item.kind == "static" %}{{ item.install_to.rsplit('/', 1)[-1] }}
         {% endif %}
+        {% if item.size_bytes %}<small class="admin-bundle-card__item-size">· {{ format_bytes(item.size_bytes) }}</small>{% endif %}
       </li>
       {% endfor %}
+      {% if not bundle.resolved_items %}
+      <li><em>Refresh the catalog to see contents.</em></li>
+      {% endif %}
     </ul>
+    {% if bundle.license_notes %}
+    <p class="admin-bundle-card__license"><strong>License:</strong> {{ bundle.license_notes }}</p>
+    {% endif %}
   </details>
 
-  <form method="post" action="/admin/bundles/{{ bundle.qualified_id }}/install" class="admin-bundle__install"
+  <form method="post" action="/admin/bundles/{{ bundle.qualified_id }}/install" class="admin-bundle-card__action"
         data-confirm="Install bundle “{{ bundle.name }}” ({{ format_bytes(bundle.resolved_size_bytes) }})? Downloads start in the background.">
     <button type="submit" class="admin-btn admin-btn--primary"
       {% if not bundle.resolved_size_bytes %}disabled{% endif %}
       {% if bundle.resolved_size_bytes and bundle.resolved_size_bytes > internal_free_bytes %}disabled{% endif %}>
       {% if not bundle.resolved_size_bytes %}
-        Cannot install — refresh catalog first
+        Refresh catalog first
       {% elif bundle.resolved_size_bytes > internal_free_bytes %}
-        Won't fit in internal storage
+        Won't fit ({{ format_bytes(internal_free_bytes) }} free)
       {% else %}
-        Install bundle
+        Install
       {% endif %}
     </button>
   </form>
-</section>
+</article>
 {% endfor %}
+</div>
 
 <p class="admin-help">
-  ZIM downloads run in parallel via the existing aria2 queue —
+  ZIMs download in parallel via the existing queue —
   watch progress on the <a href="/admin/catalog">Content</a> page.
-  Map regions extract one at a time, draining a server-side queue —
-  watch progress on the <a href="/admin/maps">Maps</a> page.
+  Want to author your own bundles? See
+  <a href="https://github.com/jmarler/prepperpi-bundles">the bundles repo</a>.
 </p>
 {% endblock %}

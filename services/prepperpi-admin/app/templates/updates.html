@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Updates · Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Updates</h2>
+
+{% if flash %}
+<div class="flash flash--{{ 'success' if flash.kind == 'ok' else 'error' }}" role="status">{{ flash.message }}</div>
+{% endif %}
+
+<p class="admin-lede">
+  When the Pi has Ethernet uplink, this page shows installed content with newer
+  versions available. ZIMs install side-by-side by default and the old copy
+  stays on disk until you remove it. Map regions re-extract in place. Bundle
+  manifests are refreshed from their source repo.
+</p>
+
+<section class="admin-card">
+  <header class="admin-card__head">
+    <h3 class="admin-card__title">Last check</h3>
+    <span class="admin-card__meta">
+      {% if snapshot.checked_at %}
+        {{ snapshot.checked_at }} · uplink: <code>{{ snapshot.uplink }}</code>
+      {% else %}
+        never run
+      {% endif %}
+    </span>
+  </header>
+
+  <form method="post" action="/admin/updates/check" class="admin-card__actions">
+    <button type="submit" class="admin-btn">Check now</button>
+    <span class="admin-card__meta-inline">
+      Runs automatically every 6 hours and on uplink-up.
+    </span>
+  </form>
+
+  {% if snapshot.errors %}
+  <details class="admin-card__errors">
+    <summary>{{ snapshot.errors|length }} error(s) during last check</summary>
+    <ul>
+      {% for e in snapshot.errors %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</section>
+
+{% if not snapshot["items"] %}
+<p class="admin-empty">
+  No installed content tracked yet. Install a ZIM, map region, or bundle and
+  this page will show available updates after the next check.
+</p>
+{% else %}
+
+{# Group by kind #}
+{% set zims = snapshot["items"] | selectattr("kind", "equalto", "zim") | list %}
+{% set regions = snapshot["items"] | selectattr("kind", "equalto", "map_region") | list %}
+{% set bundles = snapshot["items"] | selectattr("kind", "equalto", "bundle") | list %}
+{% set statics = snapshot["items"] | selectattr("kind", "equalto", "static") | list %}
+
+{% macro render_item(item) %}
+<tr class="admin-update admin-update--{{ item.status }}">
+  <td>
+    <strong>
+      {% if item.kind == "bundle" %}
+        Bundle definition update for {{ item.title }}
+      {% else %}
+        {{ item.title or item.id }}
+      {% endif %}
+    </strong>
+    {% if item.status == "stale" %}<span class="admin-pill admin-pill--stale">update available</span>{% endif %}
+    {% if item.status == "pinned" %}<span class="admin-pill admin-pill--pinned">📌 pinned</span>{% endif %}
+    {% if item.status == "unknown" %}<span class="admin-pill admin-pill--unknown">unknown</span>{% endif %}
+    {% if item.error %}<br><small class="admin-update__error">{{ item.error }}</small>{% endif %}
+    {% if item["older_files"] %}
+    <div class="admin-update__older">
+      <small><strong>Older copies still on disk:</strong></small>
+      <ul class="admin-update__older-list">
+        {% for f in item["older_files"] %}
+        <li>
+          <code>{{ f.filename }}</code>
+          <form method="post" action="/admin/zim/{{ f.filename }}/delete" class="admin-update__form"
+                data-confirm="Delete {{ f.filename }}? This removes the file from disk.">
+            <button type="submit" class="admin-btn admin-btn--danger admin-btn--small">Delete</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </td>
+  <td><code>{{ item.installed }}</code></td>
+  <td>
+    {% if item.available %}<code>{{ item.available }}</code>{% else %}—{% endif %}
+    {% if item.size_delta_bytes is not none and item.size_delta_bytes != 0 %}
+      <br><small>
+        Δ
+        {% if item.size_delta_bytes > 0 %}+{% endif %}{{ item.size_delta_bytes }} B
+      </small>
+    {% endif %}
+  </td>
+  <td class="admin-update__actions">
+    {% if item.status == "stale" %}
+    <form method="post" action="/admin/updates/apply" class="admin-update__form"
+          data-confirm="Apply update for {{ item.title or item.id }}? Side-by-side download — old copy is kept until you delete it.">
+      <input type="hidden" name="kind" value="{{ item.kind }}">
+      <input type="hidden" name="item_id" value="{{ item.id }}">
+      <button type="submit" class="admin-btn admin-btn--primary">Update</button>
+    </form>
+    {% if item.kind == "zim" %}
+    <form method="post" action="/admin/updates/apply" class="admin-update__form"
+          data-confirm="Delete the OLD ZIM first, then download the new version? If the download fails, the old version is gone — there is no automatic rollback. Continue only if you accept that trade-off.">
+      <input type="hidden" name="kind" value="{{ item.kind }}">
+      <input type="hidden" name="item_id" value="{{ item.id }}">
+      <input type="hidden" name="delete_old" value="1">
+      <button type="submit" class="admin-btn admin-btn--danger">Delete old, then update</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    {% if item.status == "pinned" %}
+    <form method="post" action="/admin/updates/unpin" class="admin-update__form">
+      <input type="hidden" name="kind" value="{{ item.kind }}">
+      <input type="hidden" name="item_id" value="{{ item.id }}">
+      <button type="submit" class="admin-btn">Unpin</button>
+    </form>
+    {% else %}
+    <form method="post" action="/admin/updates/pin" class="admin-update__form"
+          data-confirm="Pin {{ item.title or item.id }} to its current version? Future updates won't be offered until you unpin it.">
+      <input type="hidden" name="kind" value="{{ item.kind }}">
+      <input type="hidden" name="item_id" value="{{ item.id }}">
+      <button type="submit" class="admin-btn">Pin</button>
+    </form>
+    {% endif %}
+  </td>
+</tr>
+{% endmacro %}
+
+{% macro render_section(title, rows) %}
+{% if rows %}
+<section class="admin-card admin-card--updates">
+  <h3 class="admin-card__title">{{ title }} ({{ rows|length }})</h3>
+  <table class="admin-table">
+    <thead>
+      <tr>
+        <th scope="col">Item</th>
+        <th scope="col">Installed</th>
+        <th scope="col">Available</th>
+        <th scope="col">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in rows %}{{ render_item(item) }}{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endmacro %}
+
+{{ render_section("ZIMs", zims) }}
+{{ render_section("Map regions", regions) }}
+{{ render_section("Bundle definitions", bundles) }}
+{{ render_section("Static files", statics) }}
+
+{% endif %}
+{% endblock %}

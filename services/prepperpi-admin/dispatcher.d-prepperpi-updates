@@ -1,0 +1,22 @@
+#!/bin/sh
+# /etc/NetworkManager/dispatcher.d/90-prepperpi-updates
+#
+# Fires a one-shot update check whenever an interface comes up. The
+# admin service unit gates on Ethernet uplink internally, so we don't
+# need to filter by interface here — a wlan-up event for the Pi's AP
+# would just produce a "no uplink" snapshot and exit cleanly.
+#
+# Runs `systemctl start --no-block` so the dispatcher returns
+# immediately; the actual check runs asynchronously in its own unit.
+
+set -eu
+
+# NetworkManager passes (interface, action) as $1 $2.
+# Actions we care about: `up`, `vpn-up`. Skip everything else (down,
+# pre-up, hostname changes, ...).
+case "${2:-}" in
+  up|vpn-up) ;;
+  *) exit 0 ;;
+esac
+
+exec /usr/bin/systemctl start --no-block prepperpi-updates-check.service

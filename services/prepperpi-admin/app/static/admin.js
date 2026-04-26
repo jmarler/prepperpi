@@ -533,7 +533,11 @@
     }
 
     function dispatch(gid, action) {
-      fetch("/admin/downloads/" + encodeURIComponent(gid) + "/" + action, { method: "POST" })
+      // Accept: application/json keeps the JSON-shaped response when
+      // called from JS. Bare form posts (no JS, edge race) get a 303
+      // redirect to /admin/catalog instead of a raw JSON page.
+      fetch("/admin/downloads/" + encodeURIComponent(gid) + "/" + action,
+            { method: "POST", headers: { "Accept": "application/json" } })
         .then(function () {
           // Force the next poll to re-render even if the queue
           // signature hasn't changed yet — speeds up the visual

@@ -302,6 +302,39 @@ class FindKiwixBookTests(unittest.TestCase):
         self.assertIsNotNone(b)
         self.assertEqual(b["name"], "wikipedia_en_all_maxi_2024-04")
 
+    def test_filename_stem_pins_to_specific_flavor(self) -> None:
+        # Three "wikipedia_en_medicine" entries share the same `name`
+        # but differ in URL filename (mini / nopic / maxi). A manifest
+        # asking for `wikipedia_en_medicine_mini` should resolve to the
+        # mini variant only, not the largest match.
+        catalog = [
+            {"name": "wikipedia_en_medicine", "size_bytes": 162_854_912,
+             "updated": "2026-04-11T00:00:00Z",
+             "filename": "wikipedia_en_medicine_mini_2026-04.zim"},
+            {"name": "wikipedia_en_medicine", "size_bytes": 862_375_936,
+             "updated": "2026-04-11T00:00:00Z",
+             "filename": "wikipedia_en_medicine_nopic_2026-04.zim"},
+            {"name": "wikipedia_en_medicine", "size_bytes": 2_215_520_256,
+             "updated": "2026-04-11T00:00:00Z",
+             "filename": "wikipedia_en_medicine_maxi_2026-04.zim"},
+        ]
+        b = find_kiwix_book(catalog, "wikipedia_en_medicine_mini")
+        self.assertIsNotNone(b)
+        assert b is not None
+        self.assertIn("_mini_", b["filename"])
+
+        b = find_kiwix_book(catalog, "wikipedia_en_medicine_maxi")
+        self.assertIsNotNone(b)
+        assert b is not None
+        self.assertIn("_maxi_", b["filename"])
+
+        # Bare name picks the largest among same-`updated` entries
+        # (ties broken by size_bytes descending).
+        b = find_kiwix_book(catalog, "wikipedia_en_medicine")
+        self.assertIsNotNone(b)
+        assert b is not None
+        self.assertIn("_maxi_", b["filename"])
+
     def test_short_prefix_picks_latest_across_variants(self) -> None:
         # `wikipedia_en` matches every Wikipedia variant; we pick the
         # newest by `updated`. This is intentional: more-specific
