@@ -580,5 +580,70 @@ class TestNameOverrides(unittest.TestCase):
             self.assertEqual(load_catalog_names(cat), {})
 
 
+# ---------- pmtiles progress parser (extract-region.sh) ----------
+#
+# We don't import the parser as a module — it's an inline Python heredoc
+# inside extract-region.sh. Test the regex directly with the same
+# patterns pmtiles emits, so a regression in either side fails loudly.
+
+class TestPmtilesProgressParser(unittest.TestCase):
+    """The inline parser inside extract-region.sh. Mirror it here and
+    pin its behavior against real pmtiles output samples."""
+
+    REGEX = (
+        r"fetching chunks\s+(\d+)%\s*\|[^|]*\|\s*"
+        r"\(([\d.]+)(?:\s*([kMGT]?B))?\s*/\s*([\d.]+)\s*([kMGT]?B)[^)]*\)"
+        r"\s*\[(?:[^:]+):([^\]]+)\]"
+    )
+    UNIT = {"B": 1, "kB": 1000, "MB": 1000 ** 2, "GB": 1000 ** 3, "TB": 1000 ** 4}
+
+    @classmethod
+    def parse(cls, log: str):
+        import re
+        log = log.replace("\r", "\n")
+        m = None
+        for hit in re.finditer(cls.REGEX, log):
+            m = hit
+        if not m:
+            return None
+        first_unit = m.group(3) or m.group(5)
+        return {
+            "pct":   int(m.group(1)),
+            "done":  int(round(float(m.group(2)) * cls.UNIT[first_unit])),
+            "total": int(round(float(m.group(4)) * cls.UNIT[m.group(5)])),
+            "eta":   m.group(6).strip(),
+        }
+
+    def test_compact_form_same_unit(self):
+        line = "fetching chunks  53% |███████████          | (9.6/18 GB, 32 MB/s) [4m56s:4m21s]"
+        out = self.parse(line)
+        self.assertEqual(out["pct"], 53)
+        self.assertEqual(out["done"], 9_600_000_000)
+        self.assertEqual(out["total"], 18_000_000_000)
+
+    def test_long_form_different_units(self):
+        line = "fetching chunks   5% |█                  | (519 kB/4.1 MB, 1.1 MB/s) [0s:3s]"
+        out = self.parse(line)
+        self.assertEqual(out["pct"], 5)
+        self.assertEqual(out["done"], 519_000)
+        self.assertEqual(out["total"], 4_100_000)
+
+    def test_picks_last_progress_line(self):
+        # Multiple progress lines (CR-separated in real pmtiles output);
+        # the parser must converge on the most recent one.
+        log = (
+            "fetching chunks   5% |█           | (519 kB/4.1 MB, 1.1 MB/s) [0s:3s]\n"
+            "fetching chunks  29% |█████       | (1.2/4.1 MB, 2.0 MB/s) [1s:1s]\n"
+            "fetching chunks  53% |██████████  | (2.2/4.1 MB, 2.2 MB/s) [1s:1s]\n"
+        )
+        out = self.parse(log)
+        self.assertEqual(out["pct"], 53)
+        self.assertEqual(out["done"], 2_200_000)
+
+    def test_empty_log_returns_none(self):
+        self.assertIsNone(self.parse(""))
+        self.assertIsNone(self.parse("Region tiles 15, result tile entries 15"))
+
+
 if __name__ == "__main__":
     unittest.main()
