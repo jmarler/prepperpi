@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, and one-click content bundles are all end-to-end verified on a Pi 4B. Update notifier, backup, and release engineering are still ahead.
+PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, one-click content bundles, and the update notifier are all end-to-end verified on a Pi 4B. Backup and release engineering are still ahead.
 
 **What works today:**
 
@@ -180,10 +180,13 @@ PrepperPi ships the *downloader*, never the content itself. Here's what you can 
 Content bundles install curated sets in one click from the admin console's
 Bundles page:
 
-- **Starter** — medical, repair, survival fundamentals + offline maps for North America (~263 GB at install).
-- **Complete** — full English Wikipedia, full Project Gutenberg, Khan Academy Lite, WikiMed, iFixit, ham/woodworking/sustainability Stack Exchange, plus continental map coverage (~470 GB).
-- **Medical** — focused medical reference: WikiMed + Wikipedia's medicine subset (~210 MB).
-- **Education** — Wikipedia + Khan Academy Lite + Project Gutenberg (~450 GB).
+- **Starter** — compact preparedness kit: WikEM emergency medicine, iFixit repair guides, post-disaster survival, food preparation, appropriate-technology techniques (~5 GB; fits on a 32 GB SD card alongside the OS).
+- **Complete** — full English Wikipedia (with images), Wikibooks, the medical reference set, repair guides, post-disaster + food-prep ZIMs, sustainable-living wikis, a Project Gutenberg literature slice, and three Stack Exchanges (~130 GB; plan for an SSD ≥ 256 GB).
+- **Medical** — focused medical reference: WikEM (emergency medicine, full flavor) + Wikipedia's medical subset (~1 GB).
+- **Education** — Wikipedia "all" mini, Wikibooks, the medical subset, and Appropedia (~16 GB).
+
+Maps aren't bundled — install them from the Maps page so you only pull
+the regions you actually use.
 
 The four official bundles are baked into the SD image so they're available
 offline; when online, the admin console refreshes from
