@@ -140,10 +140,16 @@ PY
 
 cleanup() {
   local exit_code=$?
-  rm -f "$TMP_FILE"
-  rm -f "$LOCK_FILE"
-  if [[ "$exit_code" -ne 0 && "${WROTE_TERMINAL_STATUS:-no}" != "yes" ]]; then
-    write_status "failed" 0 0 "" 0
+  # Only clean up resources WE acquired. If we exited because the lock
+  # was already held by another install, removing $LOCK_FILE here would
+  # silently free the OTHER install's lock and let a third install
+  # race in — exactly the bug that bit the in-flight US extract earlier.
+  if [[ "${LOCK_ACQUIRED:-no}" == "yes" ]]; then
+    rm -f "$TMP_FILE"
+    rm -f "$LOCK_FILE"
+    if [[ "$exit_code" -ne 0 && "${WROTE_TERMINAL_STATUS:-no}" != "yes" ]]; then
+      write_status "failed" 0 0 "" 0
+    fi
   fi
 }
 
@@ -167,6 +173,7 @@ if ! { echo $$ > "$LOCK_FILE"; } 2>/dev/null; then
   exit 2
 fi
 set +C
+LOCK_ACQUIRED=yes  # cleanup() only frees the lock when we set this
 
 # Resolve catalog entry: source URL template + bbox + estimated size + display name.
 mapfile -t CATALOG_FIELDS < <(python3 - "$REGION_ID" <<PY
