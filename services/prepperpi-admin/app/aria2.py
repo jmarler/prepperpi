@@ -1,4 +1,4 @@
-"""Tiny aria2 JSON-RPC client (E2-S3).
+"""Tiny aria2 JSON-RPC client.
 
 aria2c exposes a JSON-RPC 2.0 endpoint at http://127.0.0.1:6800/jsonrpc
 when started with `--enable-rpc`. We only need a handful of methods:

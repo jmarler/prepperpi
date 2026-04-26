@@ -1,4 +1,4 @@
-"""Unit tests for the admin-console uplink detector (E4-S3).
+"""Unit tests for the admin-console uplink detector.
 
 Pure stdlib — runs anywhere with Python 3.10+. No FastAPI required;
 the parser lives in `app/uplink.py` precisely so we don't have to

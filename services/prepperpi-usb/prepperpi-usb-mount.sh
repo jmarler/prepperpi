@@ -4,8 +4,8 @@
 # prepperpi-usb-mount@<kernel>.service which is triggered by
 # /etc/udev/rules.d/99-prepperpi-usb.rules on USB partition add.
 #
-# Read-only is the only mode E2-S2 supports. Per-mount writes land
-# in E4 with the admin console.
+# Read-only is the only mode this script applies. The admin console
+# offers a per-mount write toggle that runs after this.
 
 set -euo pipefail
 

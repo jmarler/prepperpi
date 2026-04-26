@@ -96,15 +96,15 @@
 
 		# ---- 2 (admin). Admin console ----
 		# /admin and /admin/* reverse-proxy to the FastAPI app on
-		# 127.0.0.1:8090. AC-5 (E4-S1) requires the admin console be
-		# reachable only from the AP subnet or from the device itself.
-		# We enforce it here at the Caddy layer so the unprivileged
-		# uvicorn never even sees off-subnet requests.
+		# 127.0.0.1:8090. The admin console is reachable only from
+		# the AP subnet or the device itself; we enforce that here at
+		# the Caddy layer so the unprivileged uvicorn never even sees
+		# off-subnet requests.
 		@admin path /admin /admin/*
 		handle @admin {
 			@admin_allowed remote_ip 10.42.0.0/24 127.0.0.1/32 ::1/128
 			handle @admin_allowed {
-				# E4-S4 AC-5 — clickjack / MIME / referrer hardening.
+				# Clickjack / MIME / referrer hardening.
 				# DENY blocks iframe embedding entirely; nosniff stops
 				# content-type sniffing; same-origin keeps admin URLs
 				# from leaking via Referer to outbound links.
@@ -179,7 +179,7 @@
 		# served from cache when unchanged (304), but a new image
 		# flash with a refreshed map.js can't ever serve a stale copy.
 		# Without this, we hit a real bug: a browser that tested
-		# against a pre-E3-S2 image kept the OLD map.js whose
+		# against a pre-Protomaps-pivot image kept the OLD map.js whose
 		# STYLE_URL pointed at the now-missing /maps/styles/osm-bright/
 		# endpoint, which silently fell into the "no regions installed"
 		# UI even after both regions were properly installed.

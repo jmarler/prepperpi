@@ -1,5 +1,5 @@
 """Unit tests for app/health.py — the pure parsers used by the admin
-Storage panel (E4-S2). I/O wrappers (cpu_percent, disks, etc.) are
+Storage panel. I/O wrappers (cpu_percent, disks, etc.) are
 tested implicitly during the deploy verification on a live Pi.
 
 Run with:

@@ -1,6 +1,6 @@
 # prepperpi-aria2c
 
-Long-lived aria2c daemon used by the admin Catalog page (E2-S3) to download Kiwix ZIMs in the background. JSON-RPC over `127.0.0.1:6800`; the admin console is the only client.
+Long-lived aria2c daemon used by the admin Catalog page to download Kiwix ZIMs in the background. JSON-RPC over `127.0.0.1:6800`; the admin console is the only client.
 
 ## How it fits
 
@@ -40,7 +40,7 @@ aria2c needs to keep running across user sessions and SSH disconnects. Running i
 
 ## Sandboxing decision
 
-This unit deliberately runs *without* `ProtectSystem=strict` (and the `RestrictNamespaces=true`, `ReadWritePaths=…` that go with it). The threat model is bounded by the `prepperpi` user, which only owns its own data tree, so the kernel-tunable + control-group + capability protections do enough heavy lifting on their own. Also avoids a category of mount-namespace-vs-host divergence that bit us during E2-S3 development (private namespaces don't propagate remount option changes from the host, so a USB drive toggled `rw` would appear `ro` inside the unit's namespace).
+This unit deliberately runs *without* `ProtectSystem=strict` (and the `RestrictNamespaces=true`, `ReadWritePaths=…` that go with it). The threat model is bounded by the `prepperpi` user, which only owns its own data tree, so the kernel-tunable + control-group + capability protections do enough heavy lifting on their own. Also avoids a category of mount-namespace-vs-host divergence (private namespaces don't propagate remount option changes from the host, so a USB drive toggled `rw` would appear `ro` inside the unit's namespace).
 
 ## RPC secret
 

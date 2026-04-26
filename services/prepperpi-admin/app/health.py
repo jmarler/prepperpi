@@ -1,4 +1,4 @@
-"""System-health helpers for the admin Storage panel (E4-S2).
+"""System-health helpers for the admin Storage panel.
 
 Read-only views over /proc, /sys, and a couple of files our own
 services maintain. Pure parsers are factored out of I/O so they

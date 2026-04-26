@@ -18,8 +18,8 @@ The static parts (`index.html`, `style.css`, `dashboard.js`) are deployed by `se
 
 ## Design constraints
 
-- **Works without JavaScript** (E1-S4 AC-3). Progressive enhancement only — `dashboard.js` is loaded with `defer`, the toast container is empty until JS adds children, and every tile is server-side-rendered through Caddy's templates engine.
-- **Renders at 320 px width** (E1-S4 AC-4). Mobile-first CSS: single-column on narrow screens, 2-column at 32 rem, 4-column at 60 rem.
+- **Works without JavaScript.** Progressive enhancement only — `dashboard.js` is loaded with `defer`, the toast container is empty until JS adds children, and every tile is server-side-rendered through Caddy's templates engine.
+- **Renders at 320 px width.** Mobile-first CSS: single-column on narrow screens, 2-column at 32 rem, 4-column at 60 rem.
 - **No build step.** Plain HTML, plain CSS, vanilla ES2017 JS. The Pi doesn't need Node/npm/yarn/anything at runtime.
 
 ## Live updates

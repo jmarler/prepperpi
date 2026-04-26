@@ -1,6 +1,6 @@
 # prepperpi-ap
 
-Wi-Fi access point service. Implements [E1-S3 — Wi-Fi access point](../../#roadmap).
+Wi-Fi access point service.
 
 On every boot, `prepperpi-ap-configure.service` runs once, reads optional
 overrides from `/boot/firmware/prepperpi.conf`, derives the SSID from the
@@ -21,13 +21,13 @@ admin console can start or stop the AP as a single thing.
 | `prepperpi.conf.example` | User-facing overrides file dropped at `/boot/firmware/prepperpi.conf`. |
 | `setup.sh` | Called by the top-level installer. Installs apt packages, copies files, enables units. |
 
-## How it meets E1-S3 acceptance criteria
+## Behavior notes
 
-- **AC-1 (≤60 s to visible SSID)** — `prepperpi-ap-configure.service` is a oneshot that finishes in well under five seconds on a Pi 5; `hostapd` typically announces within another few seconds. Pi 4B with the onboard Broadcom chip is also comfortably under the 60 s budget. The configure unit orders itself `Before=hostapd.service dnsmasq.service` so the timing is deterministic.
-- **AC-2 (`PrepperPi-<mac4>`)** — `default_ssid_from_mac()` reads `/sys/class/net/wlan0/address`, strips colons, takes the last four hex digits, and uppercases them. Example: a MAC of `dc:a6:32:aa:3a:7f` becomes `PrepperPi-3A7F`.
-- **AC-3 (open by default, optional WPA2)** — `render_auth_block()` emits `wpa=0` when `WIFI_PASSWORD` is empty or absent, and a `wpa=2 + CCMP + passphrase` block otherwise. A passphrase outside the WPA2-mandated 8..63 characters fails the unit fast instead of silently falling back to open.
-- **AC-4 (≥10 clients on 4B, ≥20 on 5)** — `pi_model_default_max_sta()` reads `/proc/device-tree/model` and emits `max_num_sta=20` on the Pi 5, `10` on the Pi 4B. Operators can raise this via `MAX_STA=` in `prepperpi.conf`; real capacity is RF-environment-dependent and documented here.
-- **AC-5 (least-busy channel)** — `pick_channel()` runs `iw dev wlan0 scan`, tallies beacons observed on 2412/2437/2462 MHz (channels 1/6/11), and picks the least-loaded. Falls back to channel 6 when `iw` is missing or the scan fails (e.g. driver transient).
+- **≤60 s to visible SSID** — `prepperpi-ap-configure.service` is a oneshot that finishes in well under five seconds on a Pi 5; `hostapd` typically announces within another few seconds. Pi 4B with the onboard Broadcom chip is also comfortably under the 60 s budget. The configure unit orders itself `Before=hostapd.service dnsmasq.service` so the timing is deterministic.
+- **`PrepperPi-<mac4>`** — `default_ssid_from_mac()` reads `/sys/class/net/wlan0/address`, strips colons, takes the last four hex digits, and uppercases them. Example: a MAC of `dc:a6:32:aa:3a:7f` becomes `PrepperPi-3A7F`.
+- **Open by default, optional WPA2** — `render_auth_block()` emits `wpa=0` when `WIFI_PASSWORD` is empty or absent, and a `wpa=2 + CCMP + passphrase` block otherwise. A passphrase outside the WPA2-mandated 8..63 characters fails the unit fast instead of silently falling back to open.
+- **Default client count: 10 on Pi 4B, 20 on Pi 5** — `pi_model_default_max_sta()` reads `/proc/device-tree/model` and emits `max_num_sta=20` on the Pi 5, `10` on the Pi 4B. Operators can raise this via `MAX_STA=` in `prepperpi.conf`; real capacity is RF-environment-dependent.
+- **Least-busy channel** — `pick_channel()` runs `iw dev wlan0 scan`, tallies beacons observed on 2412/2437/2462 MHz (channels 1/6/11), and picks the least-loaded. Falls back to channel 6 when `iw` is missing or the scan fails (e.g. driver transient).
 
 ## Installing
 
@@ -54,12 +54,11 @@ They cover SSID derivation, auth-block rendering, and the
 Full integration testing — actually running hostapd and seeing a client
 associate — requires either real Pi hardware or a Linux VM with a
 passthrough Wi-Fi adapter that supports AP mode. That's the scope of
-the follow-up integration test in `tests/integration/`; not shipped in
-this story.
+the follow-up integration test in `tests/integration/`.
 
-## E4-S3 — Forward-block firewall rule
+## Forward-block firewall rule
 
-Since E4-S3, `prepperpi-ap-configure.sh` also installs a one-line nftables rule that **rejects any traffic forwarded out of `wlan0`**:
+`prepperpi-ap-configure.sh` also installs a one-line nftables rule that **rejects any traffic forwarded out of `wlan0`**:
 
 ```
 table inet prepperpi-ap {
@@ -70,7 +69,7 @@ table inet prepperpi-ap {
 }
 ```
 
-This is the security boundary for **AC-3 of E4-S3 (Online mode)**. When an Ethernet (or future USB-Wi-Fi-dongle) uplink is active, the Pi can reach the internet, but **AP clients on `10.42.0.0/24` cannot** — the kernel rejects forwarded packets that came in on `wlan0`. The Pi is a content host, not a hotspot.
+This is the security boundary for the Pi's online mode. When an Ethernet (or future USB-Wi-Fi-dongle) uplink is active, the Pi can reach the internet, but **AP clients on `10.42.0.0/24` cannot** — the kernel rejects forwarded packets that came in on `wlan0`. The Pi is a content host, not a hotspot.
 
 We also pin `net.ipv4.ip_forward=0` on every boot for belt-and-suspenders. The `nft` rule still wins if a future story or operator deliberately enables forwarding.
 

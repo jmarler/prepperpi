@@ -291,7 +291,7 @@ def discover_regions(maps_dir: Path) -> list[Region]:
     misses).
 
     If a region is present in BOTH formats (e.g. `us.mbtiles` and
-    `us.pmtiles`), the PMTiles wins — that's the format the E3-S2
+    `us.pmtiles`), the PMTiles wins — that's the format the region
     downloader produces, so we treat it as the canonical install. Same
     region_id, second copy ignored.
     """
@@ -535,7 +535,7 @@ def load_catalog_names(catalog_path: Path) -> dict[str, str]:
 
     Missing or unparseable catalog → empty dict; caller treats as
     "no overrides," which keeps the indexer working on systems that
-    were installed before the catalog shipped (E3-S1 era).
+    were installed before the catalog shipped.
     """
     if not catalog_path.exists():
         return {}

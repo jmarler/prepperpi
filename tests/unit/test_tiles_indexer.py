@@ -1,7 +1,6 @@
 """Unit tests for services/prepperpi-tiles/tiles_indexer.py.
 
-Covers the I/O boundary + pure transforms for both MBTiles (E3-S1) and
-PMTiles (E3-S2):
+Covers the I/O boundary + pure transforms for both MBTiles and PMTiles:
 
   read_region_metadata    — dispatches on extension; opens SQLite or PMTiles
   discover_regions        — walks a tmp dir; PMTiles wins on dup region_id
@@ -382,7 +381,7 @@ class TestRegionsSummary(unittest.TestCase):
         self.assertEqual(e["attribution"], "© Canada")
 
 
-# ---------- PMTiles support (E3-S2) ----------
+# ---------- PMTiles support ----------
 
 class TestPMTilesReader(unittest.TestCase):
     def test_happy_path_gzip_metadata(self):
@@ -532,7 +531,7 @@ class TestRegionsCatalog(unittest.TestCase):
             self.assertRegex(c["id"], pat, c["id"])
 
 
-# ---------- name overrides (E3-S2 fix-up) ----------
+# ---------- name overrides ----------
 
 from tiles_indexer import apply_name_overrides, load_catalog_names  # noqa: E402
 

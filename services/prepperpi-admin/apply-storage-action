@@ -11,10 +11,10 @@ that prepperpi-usb-mount.sh chose. The worker validates it strictly
 (alnum + . _ -, no slashes, no traversal) and only operates on real
 mountpoints that already exist under that directory.
 
-The state is **session-only** by design (E4-S2 decision). On unplug,
-all mount state evaporates; on re-plug, prepperpi-usb-mount.sh mounts
-read-only by default. Operators who want write access have to opt
-in again per session.
+The state is **session-only** by design. On unplug, all mount state
+evaporates; on re-plug, prepperpi-usb-mount.sh mounts read-only by
+default. Operators who want write access have to opt in again per
+session.
 
 Same trust-boundary contract as apply-network-config: treat the
 FastAPI process as untrusted. Re-validate every field; ignore argv.

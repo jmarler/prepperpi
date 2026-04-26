@@ -54,8 +54,8 @@ ensure_user() {
             "$ADMIN_USER"
   fi
 
-  # Add to systemd-journal so the diagnostics tarball endpoint (E4-S2 AC-5)
-  # can call `journalctl -u prepperpi-*` without privilege escalation.
+  # Add to systemd-journal so the diagnostics tarball endpoint can
+  # call `journalctl -u prepperpi-*` without privilege escalation.
   if getent group systemd-journal >/dev/null; then
     if ! id -nG "$ADMIN_USER" | tr ' ' '\n' | grep -qx systemd-journal; then
       log "adding '${ADMIN_USER}' to systemd-journal"
@@ -116,7 +116,7 @@ install_landing_tile() {
 
 ensure_catalog_cache_dir() {
   # The catalog cache lives under /srv/prepperpi/cache/. The admin
-  # daemon writes to it (E2-S3) — its systemd unit grants
+  # daemon writes to it — its systemd unit grants
   # ReadWritePaths=/srv/prepperpi/cache. Owned by the admin user so
   # writes don't need root; mode 0755 so other PrepperPi services
   # can read the cache if they ever need to.

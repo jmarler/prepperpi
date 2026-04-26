@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **alpha**. The base appliance (Epic 1), the content layer (Epic 2), the admin console feature set (Epic 4), and the offline-maps tile server (E3-S1) are end-to-end verified on a Pi 4B. Map region downloading (E3-S2), bundle / update tooling, backup, and release engineering are still ahead.
+PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, and the region downloader are all end-to-end verified on a Pi 4B. Bundle / update tooling, backup, and release engineering are still ahead.
 
 **What works today:**
 
@@ -36,10 +36,10 @@ PrepperPi is **alpha**. The base appliance (Epic 1), the content layer (Epic 2),
 
 **Not yet shipped (planned):**
 
-- Optional offline place-name search and routing (Epic 3 / S3)
-- One-click content bundles and update engine (Epic 5)
-- Config export, backup to USB (Epic 6)
-- Signed release images, auto-generated release notes (Epic 7)
+- Optional offline place-name search and routing
+- One-click content bundles and update engine
+- Config export, backup to USB
+- Signed release images, auto-generated release notes
 
 Star the repo if you want to be notified as each phase lands, or dive into the [roadmap](#roadmap) if you'd like to help build it.
 
@@ -123,7 +123,7 @@ The installer runs its preflight checks, asks you once to confirm that it's OK t
 
 After reboot: join the `PrepperPi-XXXX` Wi-Fi from any phone → the portal opens (iPhone), or open any URL in Chrome (Samsung). See [`installer/README.md`](installer/README.md) for flags (`--yes` for `curl | bash`, `--no-reboot` to stay in place).
 
-The curl-bash one-liner (`curl -fsSL get.prepperpi.org | bash`) is planned for Epic 7 once there's a CDN-hosted release.
+The curl-bash one-liner (`curl -fsSL get.prepperpi.org | bash`) is planned for a future release once there's a CDN-hosted artifact.
 
 ### Path B — flash a prebuilt image (non-technical, works today if you build it yourself)
 
@@ -135,7 +135,7 @@ images/build.sh      # needs Docker Desktop / docker + git; output at images/out
 
 Flash the resulting `.zip` with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) ("Choose OS" → "Use custom"). On first boot the Pi comes up as `PrepperPi-<mac4>` within ~90 seconds.
 
-GitHub Releases with prebuilt images, SHA-256 sums, and GPG signatures are planned for Epic 7. Until then, build from source.
+GitHub Releases with prebuilt images, SHA-256 sums, and GPG signatures are planned. Until then, build from source.
 
 ### Pre-flash configuration
 
@@ -173,11 +173,11 @@ Content bundles (`Starter`, `Premium`, `Medical-only`, `Education-only`) install
 
 ## Roadmap
 
-**Phase 1 — Bootable base appliance.** ✅ **Shipped (2026-04).** Installer + prebuilt SD image, Wi-Fi access point, captive portal landing page. All four stories merged.
+**Phase 1 — Bootable base appliance.** ✅ **Shipped (2026-04).** Installer + prebuilt SD image, Wi-Fi access point, captive portal landing page.
 
-**Phase 2 — Content and maps.** ⏳ **Mostly shipped.** Kiwix library serving (E2-S1) ✅, USB content hosting (E2-S2) ✅, live dashboard with event toasts (E2-S4) ✅, ZIM catalog selector (E2-S3) ✅, offline vector tile server (E3-S1) ✅, **map region downloader (E3-S2) ✅**. Still ahead: optional offline place-name search and routing (E3-S3).
+**Phase 2 — Content and maps.** ⏳ **Mostly shipped.** Kiwix library serving ✅, USB content hosting ✅, live dashboard with event toasts ✅, ZIM catalog selector ✅, offline vector tile server ✅, **map region downloader ✅**. Still ahead: optional offline place-name search and routing.
 
-**Phase 3 — Admin console and updates.** ⏳ **In progress.** Network settings (E4-S1) ✅, Ethernet online mode (E4-S3) ✅, Storage and health (E4-S2) ✅, Offline maps panel (E3-S1 AC-4) ✅. Still ahead: one-click content bundles, update notifier.
+**Phase 3 — Admin console and updates.** ⏳ **In progress.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅. Still ahead: one-click content bundles, update notifier.
 
 **Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
 
@@ -189,7 +189,7 @@ Possible futures (not committed): non-Pi SBC support, an optional offline LLM as
 - **Pi 5 is not yet verified end-to-end.** All development and testing so far has been on a Pi 4B 8 GB. Pi 5 support is in the code (`pi_model_default_max_sta` differentiates them, raspi-firmware installs for both) but a fresh flash-and-boot test on a Pi 5 is still pending hardware availability.
 - **Maps downloader is one-shot, not resumable.** Each `pmtiles extract` runs to completion or you start over. For most countries (50–500 MB) this is fine; the few giant ones (US ≈ 1.5 GB, Russia ≈ 1.2 GB) become long jobs that hurt to interrupt. Pause/resume isn't on the roadmap.
 - **Online mode is Ethernet-only by design.** No Wi-Fi role-swap on the onboard radio (avoids dropping the AP). A USB Wi-Fi dongle would let the Pi be a Wi-Fi client *and* keep the AP up — that's a stretch story, not shipped.
-- **No content downloader UI.** Today you supply ZIMs by `cp` over SSH or by dropping them onto a USB. The in-browser catalog selector arrives in E2-S3.
+- **No content downloader UI.** Today you supply ZIMs by `cp` over SSH or by dropping them onto a USB. An in-browser catalog selector is on the roadmap.
 - **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are Phase 4.
 
 ## Licensing

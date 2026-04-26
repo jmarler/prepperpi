@@ -1,4 +1,4 @@
-"""Unit tests for app/catalog.py — OPDS parser + filter helpers (E2-S3).
+"""Unit tests for app/catalog.py — OPDS parser + filter helpers.
 
 Pure stdlib. No network. Sample XML built inline to mimic what
 library.kiwix.org/catalog/v2/entries actually returns; if the

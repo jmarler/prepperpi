@@ -2,11 +2,11 @@
 
 Two responsibilities, separated cleanly:
 
-  1. Installed regions (E3-S1). The reindex service writes a JSON
-     summary to /var/lib/prepperpi/maps/regions.json; we read that for
-     display and unlink files for delete (AC-4).
+  1. Installed regions. The reindex service writes a JSON summary to
+     /var/lib/prepperpi/maps/regions.json; we read that for display
+     and unlink files for delete.
 
-  2. Available regions + downloader (E3-S2). A static catalog at
+  2. Available regions + downloader. A static catalog at
      /opt/prepperpi/services/prepperpi-tiles/regions.json lists ~200
      countries with bbox + bundle membership + estimated size. The
      downloader spawns extract-region.sh as a detached worker which
@@ -102,7 +102,7 @@ def human_size(n: int) -> str:
     return f"{n} B"
 
 
-# ---------- E3-S2: catalog + downloader ----------
+# ---------- catalog + downloader ----------
 
 # Free-space safety margin. pmtiles extract writes a .partial file and
 # atomically renames at the end; mid-extract the temp file can equal

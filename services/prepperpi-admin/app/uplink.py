@@ -1,4 +1,4 @@
-"""Uplink detection for the admin home page (E4-S3).
+"""Uplink detection for the admin home page.
 
 Pulled out of `main.py` so the pure parsing logic can be unit-tested
 without pulling FastAPI into the test environment.
@@ -16,8 +16,8 @@ def parse_uplink_routes(routes: list[dict]) -> dict:
         {"dst": "default", "gateway": "...", "dev": "eth0", ...}
 
     A default route via any interface whose name starts with "eth" counts
-    as Ethernet uplink for E4-S3. wlan/USB-dongle uplinks are a future
-    story; this detector intentionally ignores them.
+    as Ethernet uplink. wlan/USB-dongle uplinks are not detected — this
+    routine intentionally ignores them.
     """
     for route in routes:
         dev = route.get("dev", "")

@@ -29,7 +29,7 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-# AF_NETLINK is required so the uplink detector (E4-S3) can shell out to
+# AF_NETLINK is required so the uplink detector can shell out to
 # `ip -j route show default`. iproute2 uses netlink to query the kernel;
 # without it, the call fails with "Cannot open netlink socket" and the
 # admin home page falsely renders as Offline. AF_NETLINK only allows
@@ -42,8 +42,8 @@ ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
 # (which has no write permission to the file) from touching it
 # directly; only the wrapper, escalated via sudo to root, can write.
 ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps
-# /srv/prepperpi/cache for the kiwix-catalog.json cache (E2-S3).
-# /srv/prepperpi/maps for the E3-S1 region uninstall path: the admin
+# /srv/prepperpi/cache for the kiwix-catalog.json cache.
+# /srv/prepperpi/maps for the region-uninstall path: the admin
 # console deletes <region>.mbtiles directly (no privileged worker —
 # the maps dir is owned by prepperpi-admin so plain unlink suffices).
 #

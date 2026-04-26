@@ -2,7 +2,7 @@
 
 Offline vector map tile server. [tileserver-gl-light](https://github.com/maptiler/tileserver-gl) serves MBTiles **and PMTiles** from `/srv/prepperpi/maps/`, with a [MapLibre GL JS](https://maplibre.org) client served by Caddy at `/maps/`. Drop a `.mbtiles` or `.pmtiles` into the maps directory (or use the [`prepperpi-admin`](../prepperpi-admin/) Maps panel to install one of ~200 catalogued countries) and within a few seconds the landing page surfaces it, the live `/maps/` map renders it, and the admin panel lists it for one-click uninstall.
 
-E3-S1 shipped the serving + composite-style pipeline. **E3-S2 added the catalog + downloader**: a static catalog of ISO countries grouped into bundles (NA / LATAM / EU / EMEA / APAC / Oceania / Russia / Antarctica), an admin UI to pick countries / bundles, and a worker that extracts the chosen region directly from the [mapterhorn.com daily planet PMTiles](https://download.mapterhorn.com/) over HTTP range requests via the [`pmtiles`](https://github.com/protomaps/go-pmtiles) tool.
+The service ships two complementary pieces: the serving + composite-style pipeline, and a catalog-driven downloader that extracts countries directly from a planet PMTiles. The catalog groups ~200 ISO countries into bundles (NA / LATAM / EU / EMEA / APAC / Oceania / Russia / Antarctica); the admin UI picks countries / bundles, and a worker extracts the chosen region from the [mapterhorn.com daily planet PMTiles](https://download.mapterhorn.com/) over HTTP range requests via the [`pmtiles`](https://github.com/protomaps/go-pmtiles) tool.
 
 ## How it works
 
@@ -47,7 +47,7 @@ E3-S1 shipped the serving + composite-style pipeline. **E3-S2 added the catalog 
 
 The reindex script is the **single writer** of the composite style and the regions JSON; everything else (tileserver, admin, landing page) is a reader. That keeps the data flow one-way and easy to reason about.
 
-## E3-S2 downloader behavior
+## Downloader behavior
 
 A few things to know about the downloader, which differs from the [aria2-driven ZIM downloader](../prepperpi-aria2c/):
 
@@ -72,7 +72,7 @@ Pure `dict → dict` transform; the regression battery lives in [`tests/unit/tes
 | Path                                  | Role                                              |
 | ------------------------------------- | ------------------------------------------------- |
 | `tiles_indexer.py`                    | Pure-ish library: MBTiles **and PMTiles** metadata reader, composite-style builder, tileserver config builder, landing-fragment renderer. Unit-tested. |
-| `regions.json`                        | Static catalog (~200 ISO countries × bundles) used by the E3-S2 downloader. |
+| `regions.json`                        | Static catalog (~200 ISO countries × bundles) used by the downloader. |
 | `extract-region.sh`                   | Worker invoked by the admin. Locks, runs `pmtiles extract`, polls progress, atomic-publishes. |
 | `bin/pmtiles`                         | go-pmtiles binary (installed at setup time, ARM64 only). |
 | `build-tiles-index.py`                | Orchestrator. Parses CLI args, calls `tiles_indexer`, writes outputs atomically. |
@@ -138,7 +138,7 @@ Behind Caddy. The tileserver itself runs at `127.0.0.1:8083` and exposes its nat
 | `GET /maps/data/{region}/{z}/{x}/{y}.pbf`          | Vector tiles (proxied to tileserver).                |
 | `GET /maps/fonts/{fontstack}/{range}.pbf`          | Glyph stacks (proxied to tileserver).                |
 | `GET /maps/sprites/osm-bright[.json,@2x.png,…]`    | Sprite atlas (proxied to tileserver).                |
-| `GET /admin/maps`                                  | Region list + delete (E3-S1 AC-4). See [`prepperpi-admin/`](../prepperpi-admin/). |
+| `GET /admin/maps`                                  | Region list + delete. See [`prepperpi-admin/`](../prepperpi-admin/). |
 
 ## Manually applying a region (development)
 
