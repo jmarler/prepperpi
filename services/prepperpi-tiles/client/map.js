@@ -145,7 +145,15 @@
       })
       .then(function (styleSpec) {
         var sources = styleSpec && styleSpec.sources;
-        var hasAnySource = sources && Object.keys(sources).length > 0;
+        var keys    = sources ? Object.keys(sources) : [];
+        var hasAnySource = keys.length > 0;
+        // Log what we actually received so a "no regions" empty state
+        // can be distinguished from a caching / stale-style issue.
+        try {
+          console.log("[prepperpi-maps] styleSpec received: layers=" +
+            ((styleSpec && styleSpec.layers && styleSpec.layers.length) || 0) +
+            " sources=" + keys.length + " keys=" + JSON.stringify(keys));
+        } catch (_) {}
         if (!hasAnySource) {
           showEmpty("no-regions");
           return;
