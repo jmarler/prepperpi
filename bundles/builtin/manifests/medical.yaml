@@ -1,0 +1,15 @@
+id: medical
+name: Medical
+description: |
+  Focused medical reference — emergency care, drug references, anatomy,
+  and the WikiMed encyclopedia. Useful as a standalone install on a small
+  Pi or as a supplement to Starter / Complete.
+
+items:
+  - kind: zim
+    book_id: wikem_en_all_maxi
+
+  # Wikipedia's medical subset — much smaller than full Wikipedia, focused
+  # on conditions, treatments, anatomy, and pharmacology.
+  - kind: zim
+    book_id: wikipedia_en_medicine_maxi

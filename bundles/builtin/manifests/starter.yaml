@@ -1,0 +1,33 @@
+id: starter
+name: Starter
+description: |
+  A practical kit covering medical reference, repair guides, survival
+  fundamentals, and offline maps for North America. A reasonable first
+  install for a Pi 4B with a 256 GB SSD.
+license_notes: |
+  Includes CC BY-NC-SA content (iFixit). Personal and educational use only;
+  commercial redistribution (e.g. selling preloaded SD cards) is not
+  permitted by the upstream license.
+
+items:
+  # Medical reference — small, broadly useful, public-domain-friendly.
+  - kind: zim
+    book_id: wikem_en_all_maxi          # Wiki Med Project, full
+
+  # Repair guides — iFixit, BY-NC-SA.
+  - kind: zim
+    book_id: ifixit_en_all              # iFixit, all categories
+
+  # First aid / survival reference — public-domain US Army field manuals.
+  # (FM-21-76 etc. are public domain; a Kiwix archive of them is shipped
+  # under `gutenberg_en_all` for the Gutenberg-mirrored ones.)
+  - kind: zim
+    book_id: gutenberg_en_all           # Project Gutenberg, complete
+
+  # Offline maps — North America bundle covers US/CA/MX in one queue.
+  - kind: map_region
+    region_id: US
+  - kind: map_region
+    region_id: CA
+  - kind: map_region
+    region_id: MX
