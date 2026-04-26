@@ -68,7 +68,21 @@
         // glyphs to keep the initial install lightweight. Setup.sh can
         // add CJK ranges later without touching this code.
         localIdeographFontFamily: false,
-        attributionControl: { compact: true }
+        attributionControl: { compact: true },
+        // MapLibre fetches tile data from a Web Worker that has no
+        // `document` to resolve relative URLs against — Request()
+        // throws "Failed to parse URL" on bare paths like
+        // "/maps/data/BZ/{z}/{x}/{y}.pbf". Tileserver-gl-light's
+        // --public_url flag rewrites glyphs/sprite to absolute, but
+        // source.tiles entries pass through. Absolutize them here so
+        // the URL works regardless of how the user reached the box
+        // (prepperpi.home.arpa vs 10.42.0.1 vs 192.168.x.y).
+        transformRequest: function (url) {
+          if (url && url.charAt(0) === "/" && url.charAt(1) !== "/") {
+            return { url: window.location.origin + url };
+          }
+          return { url: url };
+        }
       });
     } catch (err) {
       // MapLibre throws synchronously on a fatally-malformed style.
