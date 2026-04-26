@@ -55,7 +55,14 @@ body {
   inset: 0;
 }
 
-/* "No regions installed" overlay — same footprint as #map. */
+/* "No regions installed" overlay — same footprint as #map.
+ *
+ * The `[hidden]` rule is here because `.map-empty { display: flex }` is
+ * more specific than the user-agent default `[hidden] { display: none }`
+ * and would otherwise win — the overlay would render even when JS set
+ * `hidden=true`, parking it permanently on top of a working map. */
+.map-empty[hidden] { display: none; }
+
 .map-empty {
   position: absolute;
   inset: 0;
