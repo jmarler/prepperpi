@@ -135,11 +135,17 @@ def read_catalog() -> dict:
 def enrich_with_catalog_names(regions: list[dict]) -> list[dict]:
     """Overlay catalog display names onto installed-region records.
 
-    The PMTiles extracted from the planet source carries an `attribution`
-    field but typically no friendly `name` — the indexer falls back to
-    the region_id (the ISO code). For UI clarity, we look up the catalog
-    entry by region_id and use that name when present. Pure copy; the
-    underlying regions.json on disk is unchanged.
+    The reindex script applies the same overlay before writing
+    regions.json, so this is mostly a no-op for current installs. We
+    keep it as a defensive safety net: if the catalog gets updated or
+    a region is dropped in by hand, the admin page still surfaces the
+    friendly name without waiting for the next reindex.
+
+    Always prefers the catalog name when one exists for region_id; the
+    metadata baked into Protomaps-derived .pmtiles files is generic
+    ("Protomaps Basemap") and never the real country name, so unlike
+    the older heuristic we don't try to detect "did the file name
+    itself usefully" — we just always trust the catalog.
     """
     catalog = read_catalog()
     by_id: dict[str, dict] = {}
@@ -150,11 +156,8 @@ def enrich_with_catalog_names(regions: list[dict]) -> list[dict]:
     for r in regions:
         rid = r.get("region_id", "")
         catalog_name = (by_id.get(rid) or {}).get("name")
-        # Only override when the indexer fell back to the region_id —
-        # if the .mbtiles/.pmtiles already named itself something useful,
-        # keep that.
         copy = dict(r)
-        if catalog_name and r.get("name") in ("", rid):
+        if catalog_name:
             copy["name"] = catalog_name
         out.append(copy)
     return out

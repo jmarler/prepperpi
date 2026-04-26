@@ -21,9 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from tiles_indexer import (    # noqa: E402
+    apply_name_overrides,
     build_composite_style,
     build_tileserver_config,
     discover_regions,
+    load_catalog_names,
     regions_summary,
     render_landing_fragment,
 )
@@ -37,6 +39,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--config-out", required=True, type=Path)
     p.add_argument("--fragment-out", required=True, type=Path)
     p.add_argument("--regions-json", required=True, type=Path)
+    p.add_argument(
+        "--catalog",
+        type=Path,
+        default=Path(__file__).resolve().parent / "regions.json",
+        help="Path to the static country catalog (used to overlay friendly "
+             "names onto regions whose .pmtiles metadata says only "
+             "'Protomaps Basemap')",
+    )
     return p.parse_args()
 
 
@@ -61,6 +71,9 @@ def main() -> int:
 
     regions = discover_regions(args.maps_dir)
     print(f"[prepperpi-tiles/index] discovered {len(regions)} region(s)", file=sys.stderr)
+
+    name_overrides = load_catalog_names(args.catalog)
+    apply_name_overrides(regions, name_overrides)
 
     config = build_tileserver_config(regions)
     write_atomic(args.config_out, (json.dumps(config, indent=2) + "\n").encode("utf-8"))

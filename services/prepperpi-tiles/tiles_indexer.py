@@ -528,6 +528,47 @@ def _html_escape(s: str) -> str:
     )
 
 
+# ---------- catalog-driven name override (PURE) ----------
+
+def load_catalog_names(catalog_path: Path) -> dict[str, str]:
+    """Return {region_id: friendly_name} from the static catalog.
+
+    Missing or unparseable catalog → empty dict; caller treats as
+    "no overrides," which keeps the indexer working on systems that
+    were installed before the catalog shipped (E3-S1 era).
+    """
+    if not catalog_path.exists():
+        return {}
+    try:
+        data = json.loads(catalog_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    out: dict[str, str] = {}
+    for c in data.get("countries", []):
+        if isinstance(c, dict) and c.get("id") and c.get("name"):
+            out[c["id"]] = c["name"]
+    return out
+
+
+def apply_name_overrides(regions: list[Region], overrides: dict[str, str]) -> list[Region]:
+    """In-place rename regions whose .pmtiles/.mbtiles metadata is generic.
+
+    Heuristic: if the catalog has a friendly name for region.region_id,
+    use it. We always prefer the catalog name when available — a
+    Protomaps-derived extract embeds the generic name "Protomaps
+    Basemap" regardless of what country was extracted, so the file's
+    own name field is never useful for an admin-installed region.
+    Manual drop-ins (a user copying an OpenMapTiles MBTiles into the
+    maps dir) keep their file-embedded name when their region_id
+    isn't in the catalog.
+    """
+    for r in regions:
+        friendly = overrides.get(r.region_id)
+        if friendly:
+            r.name = friendly
+    return regions
+
+
 # ---------- summary for the admin page (PURE) ----------
 
 def regions_summary(regions: Iterable[Region]) -> list[dict[str, Any]]:

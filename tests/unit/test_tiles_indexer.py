@@ -532,5 +532,53 @@ class TestRegionsCatalog(unittest.TestCase):
             self.assertRegex(c["id"], pat, c["id"])
 
 
+# ---------- name overrides (E3-S2 fix-up) ----------
+
+from tiles_indexer import apply_name_overrides, load_catalog_names  # noqa: E402
+
+
+class TestNameOverrides(unittest.TestCase):
+    def _region(self, rid: str, name: str) -> Region:
+        return Region(region_id=rid, path=Path(f"/x/{rid}.pmtiles"), kind="pmtiles",
+                      name=name, format="pbf", minzoom=0, maxzoom=15,
+                      bounds=(-180, -85, 180, 85), center=(0, 0, 2),
+                      attribution="", description="", size_bytes=1)
+
+    def test_overrides_replace_generic_protomaps_basemap(self):
+        regions = [self._region("US", "Protomaps Basemap"),
+                   self._region("CA", "Protomaps Basemap")]
+        apply_name_overrides(regions, {"US": "United States (continental)", "CA": "Canada"})
+        self.assertEqual(regions[0].name, "United States (continental)")
+        self.assertEqual(regions[1].name, "Canada")
+
+    def test_missing_override_leaves_name_alone(self):
+        regions = [self._region("XYZ", "Whatever the file said")]
+        apply_name_overrides(regions, {"US": "United States"})
+        self.assertEqual(regions[0].name, "Whatever the file said")
+
+    def test_load_catalog_names_returns_id_to_name_mapping(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cat = Path(tmp) / "regions.json"
+            cat.write_text(json.dumps({
+                "countries": [
+                    {"id": "VA", "name": "Vatican City", "bbox": [12.4, 41.9, 12.5, 41.95]},
+                    {"id": "BZ", "name": "Belize",       "bbox": [-89, 16, -88, 18]},
+                    {"id": "BAD"},
+                    "junk",
+                ]
+            }))
+            out = load_catalog_names(cat)
+            self.assertEqual(out, {"VA": "Vatican City", "BZ": "Belize"})
+
+    def test_load_catalog_names_returns_empty_on_missing_file(self):
+        self.assertEqual(load_catalog_names(Path("/nonexistent/catalog.json")), {})
+
+    def test_load_catalog_names_returns_empty_on_garbage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cat = Path(tmp) / "regions.json"
+            cat.write_text("not json")
+            self.assertEqual(load_catalog_names(cat), {})
+
+
 if __name__ == "__main__":
     unittest.main()
