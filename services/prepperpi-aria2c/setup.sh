@@ -2,7 +2,7 @@
 # setup.sh — install prepperpi-aria2c. Runs aria2c as a long-lived
 # JSON-RPC daemon under the `prepperpi` system user; the admin
 # console talks to it over 127.0.0.1:6800 to queue, pause, resume,
-# and cancel Kiwix ZIM downloads (E2-S3).
+# and cancel Kiwix ZIM downloads.
 #
 # Safe to re-run.
 

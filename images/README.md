@@ -136,7 +136,7 @@ Without any files dropped on the boot partition, the image boots with `prepper` 
 
 ### Experimental: `rpi-imager --repo` with the generated manifest
 
-`build.sh` also emits a `*.rpi-imager.json` sidecar next to the `.zip` (manifest declaring `init_format: cloudinit-rpi`). In theory `rpi-imager --repo file://...json` re-enables the customization dialog by treating the image as a first-class OS list entry. In practice `--repo` with a `file://` URL is flaky on the macOS Imager build (2.x rejects the path). The manifest is still useful when hosted over HTTP or served out of a GitHub Release; deferred to E7-S2. For now, use the boot-partition path above.
+`build.sh` also emits a `*.rpi-imager.json` sidecar next to the `.zip` (manifest declaring `init_format: cloudinit-rpi`). In theory `rpi-imager --repo file://...json` re-enables the customization dialog by treating the image as a first-class OS list entry. In practice `--repo` with a `file://` URL is flaky on the macOS Imager build (2.x rejects the path). The manifest is still useful when hosted over HTTP or served out of a GitHub Release; deferred until we have hosted releases. For now, use the boot-partition path above.
 
 ## pi-gen patches
 
@@ -150,4 +150,4 @@ If pi-gen's `arm64` branch upstream restructures stage0, the destination path in
 
 ## CI builds
 
-`.github/workflows/build-image.yml` does the same thing on GitHub's `ubuntu-24.04-arm` runners (manual trigger via the Actions tab). Produces identical artifacts. Tag-triggered release + GPG signing arrives with E7-S2.
+`.github/workflows/build-image.yml` does the same thing on GitHub's `ubuntu-24.04-arm` runners (manual trigger via the Actions tab). Produces identical artifacts. Tag-triggered release + GPG signing is planned but not yet shipped.

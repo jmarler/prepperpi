@@ -6,8 +6,8 @@ write goes through `sudo -n /opt/.../apply-network-config`. That
 wrapper is the trust boundary; this process must be assumed
 compromisable.
 
-Caddy enforces network-level access (10.42.0.0/24 + localhost only,
-per E4-S1 AC-5) before any request reaches us. We don't re-check
+Caddy enforces network-level access (10.42.0.0/24 + localhost only)
+before any request reaches us. We don't re-check
 remote_addr here -- Caddy strips it before reverse-proxy and we
 don't want to encode the AP-subnet CIDR in two places.
 """
@@ -46,15 +46,15 @@ STORAGE_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-storage-action"
 EVENTS_FILE = Path("/opt/prepperpi/web/landing/_events.json")
 USB_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
-# Catalog cache (E2-S3). The admin daemon owns this directory because
-# the prepperpi-admin systemd unit grants it ReadWritePaths=/srv/prepperpi/cache.
+# Catalog cache. The admin daemon owns this directory because the
+# prepperpi-admin systemd unit grants it ReadWritePaths=/srv/prepperpi/cache.
 CATALOG_CACHE = Path("/srv/prepperpi/cache/kiwix-catalog.json")
 # count=-1 returns the entire catalog in one response. The OPDS feed
 # is small (~3MB for the full ~3000-book catalog as of writing), and a
 # single fetch keeps the refresh path simple.
 CATALOG_URL = "https://library.kiwix.org/catalog/v2/entries?count=-1"
 CATALOG_FETCH_TIMEOUT = 60
-CATALOG_USER_AGENT = "PrepperPi-Admin/1 (E2-S3)"
+CATALOG_USER_AGENT = "PrepperPi-Admin/1"
 ZIM_BASE = Path("/srv/prepperpi/zim")
 USB_BASE = Path("/srv/prepperpi/user-usb")
 
@@ -227,7 +227,7 @@ def health_snapshot() -> dict:
     return snap
 
 
-# ---------- catalog cache + destination helpers (E2-S3) ----------
+# ---------- catalog cache + destination helpers ----------
 
 def read_catalog_cache() -> dict:
     """Return {fetched_at, books, facets} or an empty placeholder if
@@ -282,15 +282,14 @@ def fetch_catalog() -> tuple[bool, str, int]:
 def destinations() -> list[dict]:
     """Available download destinations. MVP: internal storage only.
 
-    USB destinations were tried during E2-S3 development and pulled
-    after Jon called the experience "a complete failure" — the
-    combination of slow vfat-on-USB writes, aria2's metalink resume
-    semantics, and the mount-namespace gymnastics needed to make
-    aria2c's writes hit the right thing produced too many edge cases.
-    Users wanting content on a USB drive can copy it from the SD
-    after download, or pre-load the drive from a laptop. The USB
-    write toggle on the Storage page (E4-S2 AC-5) is independent
-    and stays in place for other manual write workflows."""
+    USB destinations were tried during catalog development and pulled
+    because the experience was unreliable — the combination of slow
+    vfat-on-USB writes, aria2's metalink resume semantics, and the
+    mount-namespace gymnastics needed to make aria2c's writes hit the
+    right thing produced too many edge cases. Users wanting content
+    on a USB drive can copy it from the SD after download, or pre-load
+    the drive from a laptop. The USB write toggle on the Storage page
+    is independent and stays in place for other manual write workflows."""
     out: list[dict] = []
     free = _free_bytes(ZIM_BASE)
     out.append({
@@ -469,7 +468,7 @@ def network_post(
 
 @app.get("/admin/health")
 def health_state() -> dict:
-    """Live snapshot polled by the storage page (E4-S2 AC-1, 1 Hz)."""
+    """Live snapshot polled by the storage page (1 Hz)."""
     return health_snapshot()
 
 
@@ -505,7 +504,7 @@ def storage_usb_toggle(name: str, writable: bool = Form(...)):
 
 @app.get("/admin/diagnostics")
 def diagnostics_tarball():
-    """Produce a downloadable diagnostics tarball (E4-S2 AC-5).
+    """Produce a downloadable diagnostics tarball.
 
     Streams a tar.gz containing the install log, recent journalctl
     output for our services, /proc/cpuinfo, /proc/meminfo, lsblk, df,
@@ -589,7 +588,7 @@ def diagnostics_tarball():
     )
 
 
-# ---------- catalog page (E2-S3) ----------
+# ---------- catalog page ----------
 
 @app.get("/admin/catalog", response_class=HTMLResponse)
 def catalog_get(
@@ -688,8 +687,8 @@ def downloads_queue(
             ),
         )
 
-    # Pre-queue space check (E2-S3 explicit ask): warn the user before
-    # they start a download that won't fit.
+    # Pre-queue space check: warn the user before they start a download
+    # that won't fit.
     if book["size_bytes"] > dest["free_bytes"]:
         raise HTTPException(
             status_code=409,
@@ -779,7 +778,7 @@ def downloads_clear(gid: str):
 
 @app.get("/admin/maps", response_class=HTMLResponse)
 def maps_get(request: Request, ok: Optional[str] = None, err: Optional[str] = None) -> HTMLResponse:
-    """List installed map regions and offer per-region delete (E3-S1 AC-4).
+    """List installed map regions and offer per-region delete.
 
     Reads the regions JSON the reindex service maintains; never opens
     .mbtiles files itself. The reindex script is the single writer of
@@ -826,7 +825,7 @@ def maps_delete(region_id: str):
 
 @app.get("/admin/maps/catalog")
 def maps_catalog() -> dict:
-    """Return the catalog of available regions for the install UI (E3-S2).
+    """Return the catalog of available regions for the install UI.
 
     Enriches each country with `installed: true/false` so the UI can
     render the right state without a second call. Also includes free

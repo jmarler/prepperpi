@@ -1,4 +1,4 @@
-"""Kiwix OPDS catalog parser + filter helpers (E2-S3).
+"""Kiwix OPDS catalog parser + filter helpers.
 
 `library.kiwix.org/catalog/v2/entries?count=N` returns Atom/OPDS XML.
 We normalize it into a small, JSON-friendly dict so the admin UI can

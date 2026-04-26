@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # extract-region.sh — invoked by the admin daemon to extract one region
-# from the planet PMTiles source (E3-S2). Long-running; runs detached
+# from the planet PMTiles source. Long-running; runs detached
 # (admin spawns with `setsid` / `start_new_session=True` so the worker
 # survives an admin restart).
 #

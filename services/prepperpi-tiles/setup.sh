@@ -21,7 +21,7 @@
 #   - osm-bright-gl-style       (GitHub releases)
 #   - osm-bright sprite atlas   (GitHub Pages, openmaptiles)
 #   - glyph PBFs                (bundled with tileserver-gl-styles via npm)
-#   - go-pmtiles binary         (GitHub releases — used by E3-S2 downloader)
+#   - go-pmtiles binary         (GitHub releases — used by the region downloader)
 #
 # Safe to re-run.
 
@@ -235,7 +235,7 @@ install_glyph_fonts() {
 }
 
 install_pmtiles_binary() {
-  log "installing go-pmtiles@${GO_PMTILES_VERSION} (used by E3-S2 region downloader)"
+  log "installing go-pmtiles@${GO_PMTILES_VERSION} (used by the region downloader)"
   # Pi 4B / Pi 5 are aarch64. The host arch detection is intentionally
   # narrow — we only ship official Pi targets. arm32 / x86_64 dev
   # machines aren't supported.

@@ -1,5 +1,5 @@
 [Unit]
-Description=PrepperPi — aria2c download daemon for E2-S3 ZIM catalog
+Description=PrepperPi — aria2c download daemon for the ZIM catalog
 Documentation=https://github.com/jmarler/prepperpi
 After=network-online.target
 Wants=network-online.target

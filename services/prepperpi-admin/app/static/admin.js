@@ -581,7 +581,7 @@
     setInterval(poll, POLL_INTERVAL_MS);
   })();
 
-  // ---------- Block 4: maps page (catalog + install queue, E3-S2) ----------
+  // ---------- Block 4: maps page (catalog + install queue) ----------
   (function () {
     var catalogEl = document.getElementById("maps-catalog");
     if (!catalogEl) return;       // Not on the maps page; bail.

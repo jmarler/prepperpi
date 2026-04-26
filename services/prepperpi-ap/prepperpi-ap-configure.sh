@@ -217,10 +217,10 @@ release_radio() {
 }
 
 install_forward_block() {
-  # E4-S3 AC-3: AP clients must not be able to reach an upstream uplink
-  # (Ethernet, future USB Wi-Fi dongle, anything). Block forwarding from
-  # the AP interface in our own nftables table so we don't trip over
-  # whatever else might already exist in `inet filter`.
+  # AP clients must not be able to reach an upstream uplink (Ethernet,
+  # future USB Wi-Fi dongle, anything). Block forwarding from the AP
+  # interface in our own nftables table so we don't trip over whatever
+  # else might already exist in `inet filter`.
   #
   # We also pin net.ipv4.ip_forward=0 so the kernel won't forward in the
   # first place — belt-and-suspenders against a future story or a curious

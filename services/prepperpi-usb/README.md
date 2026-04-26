@@ -2,7 +2,7 @@
 
 Auto-mounts USB drives plugged into the Pi at `/srv/prepperpi/user-usb/<label>/`, exposes them on the landing page as a tile each, and serves them through the Caddy front door at `/usb/<label>/` with directory listing, inline preview of common formats, and Markdown rendering.
 
-Read-only by default. The per-mount write toggle defers to the admin console (E4-S2).
+Read-only by default. The per-mount write toggle defers to the admin console.
 
 ## Moving parts
 
