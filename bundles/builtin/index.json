@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "name": "Official PrepperPi bundles",
+  "homepage": "https://github.com/jmarler/prepperpi-bundles",
+  "manifests": [
+    {"id": "starter",   "url": "manifests/starter.yaml"},
+    {"id": "complete",  "url": "manifests/complete.yaml"},
+    {"id": "medical",   "url": "manifests/medical.yaml"},
+    {"id": "education", "url": "manifests/education.yaml"}
+  ]
+}

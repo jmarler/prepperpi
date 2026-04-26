@@ -1,0 +1,11 @@
+{
+  "sources": [
+    {
+      "id": "official",
+      "name": "Official PrepperPi bundles",
+      "url": "https://raw.githubusercontent.com/jmarler/prepperpi-bundles/main/index.json",
+      "enabled": true,
+      "builtin": true
+    }
+  ]
+}

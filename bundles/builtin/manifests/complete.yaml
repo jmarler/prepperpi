@@ -1,0 +1,59 @@
+id: complete
+name: Complete
+description: |
+  The comprehensive set — full English Wikipedia, all of Project Gutenberg,
+  Khan Academy Lite, full Stack Exchange archives, complete medical and
+  repair references, and global map coverage. Plan for several hundred GB
+  on disk; recommended install target is a 1 TB+ SSD.
+license_notes: |
+  Includes content under varied licenses, including CC BY-NC-SA (Khan
+  Academy, iFixit). Personal and educational use only — commercial
+  redistribution is not permitted for the non-commercial-licensed items.
+  See each item's source for full license terms.
+
+items:
+  # Full English Wikipedia.
+  - kind: zim
+    book_id: wikipedia_en_all
+
+  # Medical reference.
+  - kind: zim
+    book_id: wikem_en_all
+
+  # Repair guides.
+  - kind: zim
+    book_id: ifixit_en_all
+
+  # Reference texts and books.
+  - kind: zim
+    book_id: gutenberg_en_all
+
+  # Stack Exchange — sustainable living, woodworking, ham radio.
+  - kind: zim
+    book_id: sustainability.stackexchange.com_en_all
+  - kind: zim
+    book_id: woodworking.stackexchange.com_en_all
+  - kind: zim
+    book_id: ham.stackexchange.com_en_all
+
+  # Educational curriculum.
+  - kind: zim
+    book_id: khanacademy_en_all
+
+  # Continental map coverage. Add or remove regions to taste.
+  - kind: map_region
+    region_id: US
+  - kind: map_region
+    region_id: CA
+  - kind: map_region
+    region_id: MX
+  - kind: map_region
+    region_id: GB
+  - kind: map_region
+    region_id: DE
+  - kind: map_region
+    region_id: FR
+  - kind: map_region
+    region_id: AU
+  - kind: map_region
+    region_id: NZ

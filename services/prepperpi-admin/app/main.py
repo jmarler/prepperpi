@@ -32,6 +32,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 import aria2
+import bundles as bundles_mod
+import bundles_install
 import catalog
 import health
 import maps
@@ -912,3 +914,321 @@ def network_reset(request: Request) -> HTMLResponse:
             status_code=500,
         )
     return RedirectResponse("/admin/network?reset=1", status_code=303)
+
+
+# ---------- bundles page ----------
+
+BUNDLE_SOURCES_FILE = Path("/etc/prepperpi/bundles/sources.json")
+BUNDLE_BUILTIN_INDEX = Path("/opt/prepperpi/bundles/builtin/index.json")
+BUNDLE_BUILTIN_DIR = Path("/opt/prepperpi/bundles/builtin")
+BUNDLE_CACHE_DIR = Path("/var/lib/prepperpi/bundles")
+REGION_CATALOG_FILE = Path("/opt/prepperpi/services/prepperpi-tiles/regions.json")
+
+
+def _read_region_catalog() -> dict:
+    """Load the static maps catalog the appliance ships."""
+    try:
+        return json.loads(REGION_CATALOG_FILE.read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"regions": []}
+
+
+def _internal_free_bytes() -> int:
+    free = _free_bytes(ZIM_BASE)
+    return int(free or 0)
+
+
+def _load_builtin_bundles() -> tuple[list[bundles_mod.Bundle], list[str]]:
+    """Load the bundles baked into the image. Returns (bundles, errors)."""
+    out: list[bundles_mod.Bundle] = []
+    errs: list[str] = []
+    try:
+        idx_text = BUNDLE_BUILTIN_INDEX.read_text()
+    except OSError as exc:
+        errs.append(f"builtin index missing: {exc}")
+        return out, errs
+    try:
+        _, manifest_stubs = bundles_mod.parse_index(idx_text)
+    except bundles_mod.ManifestError as exc:
+        errs.append(f"builtin index parse failed: {exc}")
+        return out, errs
+    for stub in manifest_stubs:
+        path = BUNDLE_BUILTIN_DIR / stub["url"]
+        try:
+            text = path.read_text()
+        except OSError as exc:
+            errs.append(f"builtin manifest {stub['id']}: {exc}")
+            continue
+        try:
+            b = bundles_mod.parse_manifest(
+                text, source_id="official", source_name="Official (builtin)"
+            )
+            out.append(b)
+        except bundles_mod.ManifestError as exc:
+            errs.append(f"builtin manifest {stub['id']}: {exc}")
+    return out, errs
+
+
+def _load_remote_bundles() -> tuple[list[bundles_mod.Bundle], list[str]]:
+    """Walk every enabled source from sources.json and load its
+    manifests. On a fresh Pi (no refresh done) the cache dir is empty;
+    we fall back to builtin only and the user can hit Refresh to fetch.
+
+    Cache layout:
+        /var/lib/prepperpi/bundles/<source-id>/index.json
+        /var/lib/prepperpi/bundles/<source-id>/manifests/*.yaml
+    """
+    out: list[bundles_mod.Bundle] = []
+    errs: list[str] = []
+    sources = _read_sources()
+    for src in sources:
+        if not src.enabled:
+            continue
+        if src.builtin and src.id == "official":
+            # Already loaded from BUNDLE_BUILTIN_DIR; remote refresh
+            # overlays into a per-source cache dir.
+            continue
+        cache_idx = BUNDLE_CACHE_DIR / src.id / "index.json"
+        if not cache_idx.exists():
+            continue
+        try:
+            idx_text = cache_idx.read_text()
+            src_name, stubs = bundles_mod.parse_index(idx_text)
+        except (OSError, bundles_mod.ManifestError) as exc:
+            errs.append(f"{src.id}: {exc}")
+            continue
+        for stub in stubs:
+            path = BUNDLE_CACHE_DIR / src.id / stub["url"]
+            try:
+                text = path.read_text()
+                b = bundles_mod.parse_manifest(
+                    text,
+                    source_id=src.id,
+                    source_name=src_name or src.name or src.id,
+                )
+                out.append(b)
+            except (OSError, bundles_mod.ManifestError) as exc:
+                errs.append(f"{src.id}/{stub['id']}: {exc}")
+    return out, errs
+
+
+def _read_sources() -> list[bundles_mod.Source]:
+    try:
+        return bundles_mod.parse_sources_config(BUNDLE_SOURCES_FILE.read_text())
+    except OSError:
+        return []
+
+
+def _refresh_remote_sources() -> list[str]:
+    """Fetch index.json + manifests for every enabled non-builtin
+    source and write them to the cache. Returns a list of error
+    strings; empty list = full success."""
+    errs: list[str] = []
+    BUNDLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    for src in _read_sources():
+        if not src.enabled:
+            continue
+        if src.builtin:
+            # Refresh the builtin source IF its url is reachable; the
+            # baked /opt/.../builtin/ copy is never overwritten — we
+            # cache the latest under a per-source dir and merge at
+            # render time so a future S2 can compare versions.
+            pass
+        try:
+            idx_text = bundles_mod.fetch_text(src.url)
+        except (urllib.error.URLError, ValueError, OSError) as exc:
+            errs.append(f"{src.id}: fetch index — {exc}")
+            continue
+        try:
+            _, stubs = bundles_mod.parse_index(idx_text)
+        except bundles_mod.ManifestError as exc:
+            errs.append(f"{src.id}: index parse — {exc}")
+            continue
+        src_dir = BUNDLE_CACHE_DIR / src.id
+        manifests_dir = src_dir / "manifests"
+        manifests_dir.mkdir(parents=True, exist_ok=True)
+        # Write index first so a partial failure mid-loop doesn't
+        # leave the source unreadable.
+        (src_dir / "index.json").write_text(idx_text)
+        for stub in stubs:
+            url = bundles_mod.resolve_manifest_url(src.url, stub["url"])
+            try:
+                manifest_text = bundles_mod.fetch_text(url)
+            except (urllib.error.URLError, ValueError, OSError) as exc:
+                errs.append(f"{src.id}/{stub['id']}: fetch — {exc}")
+                continue
+            try:
+                bundles_mod.parse_manifest(
+                    manifest_text, source_id=src.id, source_name=src.name or src.id
+                )
+            except bundles_mod.ManifestError as exc:
+                errs.append(f"{src.id}/{stub['id']}: parse — {exc}")
+                continue
+            (manifests_dir / Path(stub["url"]).name).write_text(manifest_text)
+    # Stamp last-refresh time for the UI.
+    BUNDLE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    (BUNDLE_CACHE_DIR / ".last-refresh").write_text(
+        time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    )
+    (BUNDLE_CACHE_DIR / ".last-refresh-errors.json").write_text(
+        json.dumps(errs)
+    )
+    return errs
+
+
+def _read_last_refresh() -> tuple[Optional[str], list[str]]:
+    ts: Optional[str] = None
+    errs: list[str] = []
+    p_ts = BUNDLE_CACHE_DIR / ".last-refresh"
+    if p_ts.exists():
+        try:
+            ts = p_ts.read_text().strip()
+        except OSError:
+            pass
+    p_errs = BUNDLE_CACHE_DIR / ".last-refresh-errors.json"
+    if p_errs.exists():
+        try:
+            data = json.loads(p_errs.read_text())
+            if isinstance(data, list):
+                errs = [str(x) for x in data]
+        except (OSError, json.JSONDecodeError):
+            pass
+    return ts, errs
+
+
+def _all_bundles() -> tuple[list[bundles_mod.Bundle], list[str]]:
+    """Built-in + remote-cached. Resolved against the live catalogs.
+    Order: builtin first (deterministic), then remote sources in the
+    order listed in sources.json."""
+    builtin, errs1 = _load_builtin_bundles()
+    remote, errs2 = _load_remote_bundles()
+    catalog_books = read_catalog_cache().get("books") or []
+    region_catalog = _read_region_catalog()
+    for b in builtin + remote:
+        bundles_mod.resolve_bundle(
+            b, catalog_books=catalog_books, region_catalog=region_catalog
+        )
+    return builtin + remote, errs1 + errs2
+
+
+@app.get("/admin/bundles", response_class=HTMLResponse)
+def bundles_get(request: Request, ok: Optional[str] = None, err: Optional[str] = None) -> HTMLResponse:
+    bs, load_errs = _all_bundles()
+    last_refresh, refresh_errs = _read_last_refresh()
+    flash = None
+    if ok:
+        flash = {"kind": "ok", "message": ok}
+    elif err:
+        flash = {"kind": "error", "message": err}
+    return templates.TemplateResponse(
+        "bundles.html",
+        {
+            "request": request,
+            "active": "bundles",
+            "bundles": bs,
+            "internal_free_bytes": _internal_free_bytes(),
+            "format_bytes": health.format_bytes,
+            "last_refresh": last_refresh,
+            "refresh_errors": load_errs + refresh_errs,
+            "catalog_empty": not (read_catalog_cache().get("books") or []),
+            "flash": flash,
+        },
+    )
+
+
+@app.post("/admin/bundles/refresh")
+def bundles_refresh():
+    errs = _refresh_remote_sources()
+    if errs:
+        return RedirectResponse(
+            f"/admin/bundles?err=Refresh+completed+with+{len(errs)}+error(s)",
+            status_code=303,
+        )
+    return RedirectResponse("/admin/bundles?ok=Sources+refreshed", status_code=303)
+
+
+@app.post("/admin/bundles/{qualified_id}/install")
+def bundles_install_endpoint(qualified_id: str):
+    if ":" not in qualified_id:
+        raise HTTPException(status_code=400, detail="bundle id must be source:id")
+    source_id, _, bundle_id = qualified_id.partition(":")
+
+    bs, _ = _all_bundles()
+    bundle = next(
+        (b for b in bs if b.source_id == source_id and b.id == bundle_id),
+        None,
+    )
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="bundle not found")
+    if bundle.resolved_size_bytes == 0 and not bundle.resolved_items:
+        raise HTTPException(
+            status_code=409, detail="bundle has no resolvable items"
+        )
+    if bundle.resolved_size_bytes > _internal_free_bytes():
+        return RedirectResponse(
+            "/admin/bundles?err=Bundle+won%27t+fit+in+internal+storage",
+            status_code=303,
+        )
+
+    queued_zims = 0
+    queued_statics = 0
+    queued_regions: list[str] = []
+    in_flight = bundles_install.aria2_in_flight_filenames()
+
+    for it in bundle.resolved_items:
+        kind = it.get("kind")
+        if kind == "zim":
+            url = it.get("url")
+            if not url:
+                continue
+            # Skip duplicates already in aria2.
+            existing = read_catalog_cache().get("books") or []
+            book = next(
+                (b for b in existing if b.get("name") == it.get("name")), None
+            )
+            filename = book.get("filename") if book else None
+            if filename and filename in in_flight:
+                continue
+            try:
+                bundles_install.queue_zim(
+                    url=url, filename=filename or "", dest_dir=ZIM_BASE
+                )
+                queued_zims += 1
+            except aria2.Aria2Error:
+                continue
+        elif kind == "static":
+            try:
+                bundles_install.queue_static(
+                    url=it["url"],
+                    sha256=it["sha256"],
+                    install_to=it["install_to"],
+                )
+                queued_statics += 1
+            except aria2.Aria2Error:
+                continue
+        elif kind == "map_region":
+            queued_regions.append(it["region_id"])
+
+    if queued_regions:
+        bundles_install.append_to_queue(queued_regions)
+        bundles_install.kick_drainer(
+            BUNDLE_CACHE_DIR / "last-drainer.log"
+        )
+
+    summary_parts = []
+    if queued_zims:
+        summary_parts.append(f"{queued_zims} ZIM(s)")
+    if queued_statics:
+        summary_parts.append(f"{queued_statics} static(s)")
+    if queued_regions:
+        summary_parts.append(f"{len(queued_regions)} map region(s)")
+    if not summary_parts:
+        return RedirectResponse(
+            "/admin/bundles?err=Nothing+to+queue+(items+already+in+flight%3F)",
+            status_code=303,
+        )
+    summary = ", ".join(summary_parts)
+    return RedirectResponse(
+        f"/admin/bundles?ok=Queued+{summary}",
+        status_code=303,
+    )

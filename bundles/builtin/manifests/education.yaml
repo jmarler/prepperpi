@@ -1,0 +1,19 @@
+id: education
+name: Education
+description: |
+  Educational content for kids and adults — Wikipedia (in the language of
+  your choice), Khan Academy Lite, and Project Gutenberg. Pairs well with
+  a household library on a single Pi.
+license_notes: |
+  Khan Academy is CC BY-NC-SA. Personal and educational use only —
+  commercial redistribution is not permitted.
+
+items:
+  - kind: zim
+    book_id: wikipedia_en_all
+
+  - kind: zim
+    book_id: khanacademy_en_all
+
+  - kind: zim
+    book_id: gutenberg_en_all

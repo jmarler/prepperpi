@@ -281,6 +281,38 @@ fi
 # the tileserver restarts. ~5s end to end.
 mv -f "$TMP_FILE" "$FINAL_FILE"
 
+# Source-sidecar JSON. Captures where this PMTiles came from and the
+# upstream's ETag / Last-Modified at extract time so the update notifier
+# can later HEAD the source and detect staleness without a full
+# download. Lives next to the .pmtiles so `cp` carries both.
+SIDECAR_FILE="${MAPS_DIR}/${REGION_ID}.source.json"
+SOURCE_HEADERS=$(curl -sIL --max-time 10 "$SOURCE_URL" 2>/dev/null || true)
+SOURCE_ETAG=$(printf '%s' "$SOURCE_HEADERS" | awk 'tolower($1)=="etag:"{sub(/^[^:]*:[ \t]*/,""); gsub(/[\r\n]/,""); print; exit}')
+SOURCE_LAST_MODIFIED=$(printf '%s' "$SOURCE_HEADERS" | awk 'tolower($1)=="last-modified:"{sub(/^[^:]*:[ \t]*/,""); gsub(/[\r\n]/,""); print; exit}')
+EXTRACTED_BYTES=$(stat -c%s "$FINAL_FILE" 2>/dev/null || echo 0)
+sidecar_tmp=$(mktemp)
+SIDECAR_TMP="$sidecar_tmp" \
+REGION_ID="$REGION_ID" \
+SOURCE_URL="$SOURCE_URL" \
+SOURCE_ETAG="$SOURCE_ETAG" \
+SOURCE_LAST_MODIFIED="$SOURCE_LAST_MODIFIED" \
+EXTRACTED_BYTES="$EXTRACTED_BYTES" \
+python3 - <<'PYEOF'
+import json, os, datetime
+payload = {
+    "region_id":      os.environ["REGION_ID"],
+    "source_url":     os.environ["SOURCE_URL"],
+    "etag":           os.environ.get("SOURCE_ETAG") or None,
+    "last_modified":  os.environ.get("SOURCE_LAST_MODIFIED") or None,
+    "extracted_at":   datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    "extracted_bytes": int(os.environ.get("EXTRACTED_BYTES") or 0),
+}
+with open(os.environ["SIDECAR_TMP"], "w") as fh:
+    json.dump(payload, fh, indent=2)
+    fh.write("\n")
+PYEOF
+mv -f "$sidecar_tmp" "$SIDECAR_FILE"
+
 final_size=$(stat -c%s "$FINAL_FILE" 2>/dev/null || echo 0)
 WROTE_TERMINAL_STATUS=yes
 write_status "complete" "$final_size" "$final_size" "" 0

@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, and the region downloader are all end-to-end verified on a Pi 4B. Bundle / update tooling, backup, and release engineering are still ahead.
+PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, and one-click content bundles are all end-to-end verified on a Pi 4B. Update notifier, backup, and release engineering are still ahead.
 
 **What works today:**
 
@@ -33,11 +33,12 @@ PrepperPi is **alpha**. The base appliance, the content layer, the admin console
 - ✅ **Content catalog** — browse the full Kiwix library (~3500 ZIMs) filterable by language, category, size, and name; queue selected items for resumable background download via aria2c; pause / resume / cancel / clear from the same page. Downloads land in internal storage (SD card)
 - ✅ **Offline maps — tile server** — drop an OpenMapTiles `.mbtiles` or `.pmtiles` into `/srv/prepperpi/maps/` and a full-screen MapLibre GL JS map of the installed region(s) appears at `/maps/`; multiple regions render seamlessly via a composite OSM-Bright style with one source per region; per-region uninstall from the admin console. No-JS users see a static fallback so the page is never blank
 - ✅ **Offline maps — region downloader** — admin console catalog of ~200 ISO countries grouped into 8 one-click bundles (NA, LATAM, EU, EMEA, APAC, Oceania, Russia, Antarctica). Click a country (or a bundle, which queues each member sequentially) and PrepperPi extracts just that region's PMTiles directly out of the [mapterhorn.com](https://download.mapterhorn.com/) daily planet via HTTP range requests — no full-planet download required. Pre-flight free-space check, live progress, cancel button. One install at a time
+- ✅ **Content bundles** — curated YAML manifests (Kiwix ZIMs + map regions + optional static files) installable in one click from the admin console's Bundles page. Four official bundles ship in the image (Starter, Complete, Medical, Education); additional bundles can be hosted by anyone — point your Pi at a community-managed source URL from the admin console. See [`docs/creating-bundles.md`](docs/creating-bundles.md) for the schema and how to author your own. Backed by the [`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles) repo
 
 **Not yet shipped (planned):**
 
 - Optional offline place-name search and routing
-- One-click content bundles and update engine
+- Update notifier (badge in the admin when new ZIM versions or bundle revisions are available)
 - Config export, backup to USB
 - Signed release images, auto-generated release notes
 
@@ -53,7 +54,7 @@ It is a free, open-source, clean-room equivalent of commercial offline-library d
 
 - Broadcasts its own Wi-Fi access point, `PrepperPi-XXXX`, out of the box.
 - Captive portal — join the Wi-Fi and your device opens the home page automatically.
-- Offline Wikipedia (every language Kiwix publishes), iFixit, WikiHow, Project Gutenberg, Khan Academy Lite, Stack Exchange, and the Kiwix medical pack.
+- Offline Wikipedia (every language Kiwix publishes), iFixit, Project Gutenberg, Khan Academy Lite, Stack Exchange, and the Kiwix medical pack.
 - Offline street maps for North America, Europe, and Oceania, with optional place-name search and turn-by-turn routing.
 - Plug-in USB storage is auto-mounted and exposed in the landing page.
 - Browser-based admin console for network settings, content bundles, updates, and live health.
@@ -103,7 +104,7 @@ PrepperPi targets the Raspberry Pi 4B and Pi 5. Older Pis are not supported in v
 
 You'll also want:
 
-- **Storage for content:** USB 3.0 SSD (Pi 4B) or NVMe via a HAT (Pi 5). 512 GB is a comfortable default for a Premium-equivalent library.
+- **Storage for content:** USB 3.0 SSD (Pi 4B) or NVMe via a HAT (Pi 5). 512 GB is a comfortable default; full Wikipedia + maps + medical + repair fits in ~250 GB, but the Complete bundle wants 1 TB+.
 - **SD card for the OS:** a 16 GB+ A2-rated card. Cheap, replaceable.
 - **Power:** the official Pi USB-C supply (5 V / 3 A for Pi 4B, 5 V / 5 A for Pi 5) for bench use; any decent 20 000 mAh USB-C PD battery bank for field use.
 
@@ -160,16 +161,36 @@ PrepperPi ships the *downloader*, never the content itself. Here's what you can 
 |---|---|---|---|
 | Encyclopedias | Wikipedia (all Kiwix languages), Wikiversity, Wiktionary | Kiwix | CC BY-SA |
 | Repair | iFixit | Kiwix | CC BY-NC-SA |
-| How-to | WikiHow | Kiwix | CC BY-NC-SA |
 | Medical | WikiMed, MedlinePlus, US military medicine field manuals | Kiwix, NIH, public-domain archives | Public domain / CC |
 | Education | Khan Academy Lite, Stack Exchange | Kiwix | CC BY-NC-SA / CC BY-SA |
 | Literature | Project Gutenberg (60 000+ books) | Kiwix / Gutenberg | Public domain |
-| Maps | OpenMapTiles MBTiles for North America, Europe, Oceania | OpenMapTiles / Geofabrik | ODbL |
+| Maps | Daily-built OpenStreetMap PMTiles, ~200 country extracts | Protomaps planet PMTiles + OSM | ODbL |
 | Emergency | Ready.gov (FEMA), Nuclear War Survival Skills, US Army FM 21-76 survival manual | ready.gov, OISM, public-domain military archives | Public domain |
-| Video | TED talks (what Kiwix publishes) | Kiwix | CC BY-NC-ND |
 | Your own | Anything you drop on a USB drive | You | You |
 
-Content bundles (`Starter`, `Premium`, `Medical-only`, `Education-only`) install the curated sets in one click.
+> **Notes on Kiwix's library churn.** Kiwix periodically retires ZIMs whose
+> upstream license terms change. As of 2026-04, **WikiHow** and the general
+> **TED talks** ZIMs are no longer published by Kiwix and have been removed
+> from PrepperPi's bundles. Themed TED collections like
+> `ted_mul_sustainability` are still available for individual install via
+> the Content page.
+
+### Bundles
+
+Content bundles install curated sets in one click from the admin console's
+Bundles page:
+
+- **Starter** — medical, repair, survival fundamentals + offline maps for North America (~263 GB at install).
+- **Complete** — full English Wikipedia, full Project Gutenberg, Khan Academy Lite, WikiMed, iFixit, ham/woodworking/sustainability Stack Exchange, plus continental map coverage (~470 GB).
+- **Medical** — focused medical reference: WikiMed + Wikipedia's medicine subset (~210 MB).
+- **Education** — Wikipedia + Khan Academy Lite + Project Gutenberg (~450 GB).
+
+The four official bundles are baked into the SD image so they're available
+offline; when online, the admin console refreshes from
+[`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles) for the
+latest. Anyone can host a community-managed bundle source — see
+[`docs/creating-bundles.md`](docs/creating-bundles.md) for the schema and
+how to author your own without forking.
 
 ## Roadmap
 
@@ -177,7 +198,7 @@ Content bundles (`Starter`, `Premium`, `Medical-only`, `Education-only`) install
 
 **Phase 2 — Content and maps.** ⏳ **Mostly shipped.** Kiwix library serving ✅, USB content hosting ✅, live dashboard with event toasts ✅, ZIM catalog selector ✅, offline vector tile server ✅, **map region downloader ✅**. Still ahead: optional offline place-name search and routing.
 
-**Phase 3 — Admin console and updates.** ⏳ **In progress.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅. Still ahead: one-click content bundles, update notifier.
+**Phase 3 — Admin console and updates.** ⏳ **Mostly shipped.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅, **one-click content bundles ✅**. Still ahead: update notifier.
 
 **Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
 
@@ -199,7 +220,7 @@ Possible futures (not committed): non-Pi SBC support, an optional offline LLM as
 **Content.** The content you install is **not** covered by PrepperPi's code license — each source sets its own terms. A few that matter in practice:
 
 - Wikipedia is **CC BY-SA**: free to redistribute with attribution under the same license.
-- WikiHow, Khan Academy, and iFixit are **CC BY-NC-SA**: free for personal and educational use, but **not for commercial redistribution**. If you're ever tempted to sell a preloaded PrepperPi, these have to come off first, or you need a separate arrangement with the content publisher.
+- Khan Academy and iFixit are **CC BY-NC-SA**: free for personal and educational use, but **not for commercial redistribution**. If you're ever tempted to sell a preloaded PrepperPi, these have to come off first, or you need a separate arrangement with the content publisher.
 - OpenStreetMap data is **ODbL**: redistribute with attribution and keep derivatives open.
 - US Government material (FEMA, military manuals, NIH) and Project Gutenberg are **public domain**.
 
