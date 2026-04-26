@@ -30,6 +30,11 @@ from pathlib import Path
 
 CONF_FILE = Path("/boot/firmware/prepperpi.conf")
 
+# Hard cap on the JSON payload we'll read from stdin. Legitimate
+# payloads are a few hundred bytes; anything north of this is either a
+# bug or an attempt to wedge the worker by holding it in stdin.read().
+MAX_STDIN_BYTES = 1 << 20  # 1 MiB
+
 # Two-letter ISO 3166-1 codes hostapd's regulatory database accepts.
 # Hard-coding rather than punting to the user keeps the validation
 # strict and lets us bound the surface attack a malformed code
@@ -41,6 +46,13 @@ ALLOWED_COUNTRIES = {
     "NZ", "PH", "PL", "PT", "RO", "RU", "SE", "SG", "SK", "TH",
     "TR", "TW", "UA", "US", "VN", "ZA",
 }
+
+# Countries on the FCC regulatory domain restrict 2.4 GHz to channels
+# 1-11. hostapd refuses to start if asked to use channel 12 or 13 on
+# any of these. Defense-in-depth: the rollback in main() is the
+# load-bearing recovery, but rejecting at validation time keeps the
+# bad config off disk in the first place.
+FCC_COUNTRIES = frozenset({"US", "CA", "MX"})
 
 # SSID is "any printable UTF-8" per IEEE; we restrict to a sensible
 # subset so we don't hand hostapd something exotic and accidentally
@@ -81,19 +93,27 @@ def validate_set(spec: dict) -> list[str]:
         errors.append(_err("wifi_password: contains non-printable characters"))
 
     channel = spec.get("channel", "auto")
+    ch_int: int | None = None
     if channel != "auto":
         try:
-            ch = int(channel)
+            ch_int = int(channel)
         except (ValueError, TypeError):
             errors.append(_err("channel: must be 'auto' or 1-13"))
         else:
-            if not (1 <= ch <= 13):
+            if not (1 <= ch_int <= 13):
                 errors.append(_err("channel: must be 'auto' or 1-13"))
+                ch_int = None
 
     country = spec.get("country", "US")
     if country not in ALLOWED_COUNTRIES:
         errors.append(_err(
             f"country: must be one of {', '.join(sorted(ALLOWED_COUNTRIES))}"
+        ))
+
+    if ch_int is not None and country in FCC_COUNTRIES and ch_int > 11:
+        errors.append(_err(
+            f"channel: {ch_int} is not allowed in {country} "
+            f"(regulatory domain restricts {country} to channels 1-11)"
         ))
 
     return errors
@@ -122,6 +142,41 @@ def write_config(spec: dict) -> None:
     tmp.replace(CONF_FILE)
 
 
+def snapshot_config() -> bytes | None:
+    """Read the current conf as bytes, or None if the file doesn't exist.
+    Used by the rollback path so a failed apply can restore the prior
+    state byte-for-byte (including the factory-shipped commented header
+    if no admin save has happened yet)."""
+    try:
+        return CONF_FILE.read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def restore_config(snapshot: bytes | None) -> None:
+    """Restore the conf file from a snapshot taken before the failed
+    apply. None means "no file existed" — delete to match. Atomic via
+    rename, same as write_config."""
+    if snapshot is None:
+        if CONF_FILE.exists():
+            CONF_FILE.unlink()
+        return
+    tmp = CONF_FILE.with_suffix(".conf.tmp")
+    tmp.write_bytes(snapshot)
+    tmp.chmod(0o644)
+    tmp.replace(CONF_FILE)
+
+
+def factory_reset_config() -> None:
+    """Last-resort failsafe: delete the conf entirely.
+    prepperpi-ap-configure falls back to its hard-coded defaults
+    (auto SSID from MAC, open Wi-Fi, US, auto channel) when the file
+    is missing — the same path the 'Reset to factory defaults' button
+    takes."""
+    if CONF_FILE.exists():
+        CONF_FILE.unlink()
+
+
 def reset_config() -> None:
     # "Reset to defaults" = remove the override file entirely so
     # prepperpi-ap-configure falls back to its hard-coded defaults
@@ -145,8 +200,18 @@ def restart_ap() -> None:
 
 
 def main() -> int:
+    # Refuse to run with stdin attached to a TTY. The legitimate caller
+    # is FastAPI piping JSON; a TTY here means somebody invoked us
+    # interactively (confused-deputy probe) and we'd block on read().
+    if sys.stdin.isatty():
+        sys.stderr.write("refusing to read JSON payload from a TTY\n")
+        return 2
     try:
-        raw = sys.stdin.read()
+        # Read up to MAX_STDIN_BYTES + 1 so we can tell oversize from exact-fit.
+        raw = sys.stdin.read(MAX_STDIN_BYTES + 1)
+        if len(raw) > MAX_STDIN_BYTES:
+            sys.stderr.write(f"payload exceeds {MAX_STDIN_BYTES} bytes\n")
+            return 2
         spec = json.loads(raw)
     except json.JSONDecodeError as exc:
         sys.stderr.write(f"invalid JSON on stdin: {exc}\n")
@@ -162,15 +227,50 @@ def main() -> int:
             for e in errors:
                 sys.stderr.write(f"error: {e}\n")
             return 2
+        # Layered recovery for AP brick resistance:
+        #   Layer 1 — validation (above) catches known-bad combinations
+        #             like FCC country + channel > 11.
+        #   Layer 2 — snapshot the conf, apply, restart_ap. On failure
+        #             restore the snapshot and re-run restart_ap so the
+        #             AP comes back up on the prior known-good config.
+        #   Layer 3 — if Layer 2's restart also fails (e.g. somebody
+        #             corrupted the prior conf out-of-band), delete
+        #             prepperpi.conf entirely and run restart_ap once
+        #             more. prepperpi-ap-configure falls back to safe
+        #             hard-coded defaults when the file is absent.
+        snapshot = snapshot_config()
         try:
             write_config(spec)
             restart_ap()
-        except subprocess.CalledProcessError as exc:
-            sys.stderr.write(f"systemctl failed: {exc}\n")
-            return 1
-        except OSError as exc:
-            sys.stderr.write(f"write failed: {exc}\n")
-            return 1
+        except (subprocess.CalledProcessError, OSError) as apply_exc:
+            sys.stderr.write(
+                f"apply failed ({apply_exc}); attempting rollback\n"
+            )
+            try:
+                restore_config(snapshot)
+                restart_ap()
+                sys.stderr.write(
+                    "rollback succeeded; previous config restored\n"
+                )
+                return 1
+            except (subprocess.CalledProcessError, OSError) as rb_exc:
+                sys.stderr.write(
+                    f"rollback failed ({rb_exc}); falling back to factory defaults\n"
+                )
+                try:
+                    factory_reset_config()
+                    restart_ap()
+                    sys.stderr.write(
+                        "factory-reset failsafe succeeded; "
+                        "prepperpi.conf removed and AP restarted with defaults\n"
+                    )
+                    return 1
+                except (subprocess.CalledProcessError, OSError) as fr_exc:
+                    sys.stderr.write(
+                        f"factory-reset failsafe failed ({fr_exc}); "
+                        "manual recovery required\n"
+                    )
+                    return 1
         sys.stdout.write("ok\n")
         return 0
     elif action == "reset":

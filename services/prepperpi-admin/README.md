@@ -32,12 +32,40 @@ prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/app
 
 The wrapper script itself is owned `root:root` mode `0755` so the admin user cannot replace or modify it. (`sudo` refuses to execute any script writable by non-root.)
 
-> **TODO — pen-test before declaring E4 done.** Walk through:
-> stdin parser fuzzing, sudoers-rule confused-deputy probes, CSRF on the form
-> POSTs (no token today — relying on AC-5's network ACL), template-injection
-> attempts, an attacker on the AP subnet trying to brick hostapd via specific
-> country / channel combinations, and the JS `confirm()` dialog as an
-> opt-out for clickjack.
+### Pen-test pass
+
+Closed by [E4-S4 (April 2026)](../../docs/security-pentest-2026-04.md). Summary
+of the threat-model boundary as it stands now:
+
+- **Privileged-worker boundary** (AC-1): `apply-network-config` and
+  `apply-storage-action` re-validate every JSON-stdin field independently of
+  FastAPI; both refuse TTY stdin and cap the payload at 1 MiB so a confused
+  deputy cannot wedge them.
+- **CSRF defense** (AC-2): a FastAPI middleware (`csrf_origin_guard`) rejects
+  cross-origin POST/PUT/PATCH/DELETE on `/admin/*` by comparing `Origin` /
+  `Referer` against `Host`. With no auth or sessions, this is the load-bearing
+  defense against a victim's AP-subnet browser being used as a proxy by an
+  off-network attacker.
+- **Output encoding** (AC-3): Jinja autoescape on by default; the one
+  JS-string-context interpolation (`onsubmit="confirm('… {{ r.name|e }} …')"`
+  in `maps.html`) was replaced with a `data-confirm` attribute + global JS
+  handler so `r.name` lives in HTML-attribute context and is no longer
+  evaluated as JS.
+- **Brick resistance** (AC-4): three-layer recovery — (1) FCC reg-domain
+  matrix (`US`/`CA`/`MX` → channels 1-11) blocks the known brick combos at
+  validation; (2) on `restart_ap()` failure, the worker rolls
+  `prepperpi.conf` back to the prior snapshot and retries; (3) if the
+  rollback's restart also fails, the conf is deleted entirely so
+  `prepperpi-ap-configure` boots on its hard-coded factory defaults.
+- **Headers** (AC-5): Caddy emits `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff`, and `Referrer-Policy: same-origin` on
+  every `/admin/*` response. JS `confirm()` is documented as UX-only — the
+  server requires no JS-issued state to mutate, and the security boundary is
+  the network ACL + the CSRF middleware.
+- **Information disclosure** (AC-6): the diagnostics tarball excludes
+  `prepperpi.conf`; greps for the aria2 RPC secret, `/etc/shadow` hashes, and
+  `wpa_passphrase` over the full bundle return zero hits; 4xx/5xx responses
+  return generic detail with no traceback.
 
 ## AC-5 access guard
 
