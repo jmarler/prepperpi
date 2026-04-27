@@ -2,7 +2,7 @@
 {% block title %}Backup · Admin · PrepperPi{% endblock %}
 {% block content %}
 <h2 class="admin-page__title">Backup &amp; recovery</h2>
-<p class="admin-lede">Produce a flashable disaster-recovery image of this PrepperPi onto a USB drive. Use Etcher or Raspberry Pi Imager to write the image onto a fresh microSD if your current SD card dies. Full howto at <a href="/docs/backup-and-recovery.md">docs/backup-and-recovery.md</a>.</p>
+<p class="admin-lede">Two ways to back up: a full <strong>disaster-recovery image</strong> to USB (flashable with Etcher / Raspberry Pi Imager onto a fresh microSD), or a small <strong>config export</strong> that captures AP settings + the list of installed bundles for moving to a replacement Pi. Full howto at <a href="/docs/backup-and-recovery.md">docs/backup-and-recovery.md</a>.</p>
 
 {% if ok %}<p class="admin-callout admin-callout--ok" role="status">{{ ok }}</p>{% endif %}
 {% if err %}<p class="admin-callout admin-callout--warn" role="alert">{{ err }}</p>{% endif %}
@@ -103,5 +103,25 @@
 		{% endfor %}
 	</ul>
 	{% endif %}
+</section>
+
+<section class="admin-section" aria-labelledby="config-export-title">
+	<h3 id="config-export-title" class="admin-section__title">Config export / import</h3>
+	<p class="admin-meta">A small <code>.tar.gz</code> capturing AP settings (SSID, Wi-Fi password, channel, country) plus the list of bundles you installed. Content itself is not included — bundle re-downloads are queued on import. Use this to move your configuration to a replacement Pi without flashing a full image.</p>
+
+	<div class="admin-form__actions" style="margin-top:0.75rem">
+		<a href="/admin/backup/config-export" class="btn btn--primary" download>Export config</a>
+	</div>
+
+	<form method="post" action="/admin/backup/config-import" enctype="multipart/form-data" class="admin-form" style="margin-top:1.25rem" onsubmit="return confirm('Import this config? Current AP settings and the installed-bundles list will be replaced.');">
+		<div class="admin-form__field">
+			<label for="config-import-file">Import a config bundle (<code>.tar.gz</code>)</label>
+			<input type="file" name="file" id="config-import-file" accept=".tar.gz,.tgz,application/gzip" required>
+		</div>
+		<p class="admin-callout admin-callout--warn"><strong>Replace, not merge.</strong> Imported settings overwrite the current AP config and the installed-bundles list. Bundles in the import that are no longer in your sources will be reported as failed but the rest will still queue.</p>
+		<div class="admin-form__actions">
+			<button type="submit" class="btn btn--secondary">Import config</button>
+		</div>
+	</form>
 </section>
 {% endblock %}

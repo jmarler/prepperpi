@@ -7,7 +7,7 @@
 Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, and more — no internet, no subscriptions, no tracking.
 
 [![License: MIT-0](https://img.shields.io/badge/license-MIT--0-blue)](LICENSE)
-[![Status: Alpha](https://img.shields.io/badge/status-alpha-yellow)](#status)
+[![Status: Beta](https://img.shields.io/badge/status-beta-blue)](#status)
 [![Platform: Raspberry Pi 4B / 5](https://img.shields.io/badge/platform-Raspberry%20Pi%204B%20%2F%205-c51a4a)](#hardware)
 
 </div>
@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, one-click content bundles, the update notifier, and disaster-recovery image backup are all end-to-end verified on a Pi 4B. Config export and release engineering are still ahead.
+PrepperPi is **beta**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, one-click content bundles, the update notifier, disaster-recovery image backup, and config export / import are all end-to-end verified on a Pi 4B. Beta means: every feature in the box has been used by the maintainer on real hardware, but you're early enough that you should expect rough edges and report them. Release engineering (signed images, release pipeline) is the last thing standing between beta and 1.0.
 
 **What works today:**
 
@@ -36,11 +36,11 @@ PrepperPi is **alpha**. The base appliance, the content layer, the admin console
 - ✅ **Content bundles** — curated YAML manifests (Kiwix ZIMs + map regions + optional static files) installable in one click from the admin console's Bundles page. Four official bundles ship in the image (Starter, Complete, Medical, Education); additional bundles can be hosted by anyone — point your Pi at a community-managed source URL from the admin console. See [`docs/creating-bundles.md`](docs/creating-bundles.md) for the schema and how to author your own. Backed by the [`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles) repo
 - ✅ **Update notifier** — admin console's Updates page (and a global nav badge) surfaces ZIMs, map regions, bundle manifests, and bundle static files that have newer versions upstream. Auto-checks every 6 h and on uplink-up via a NetworkManager dispatcher hook; "Check now" button for on-demand. Per-item Update / Pin / Unpin; ZIMs install side-by-side by default, with a "delete old, then update" path for tight-storage cases (no automatic rollback in that path — surfaced in the confirm dialog). Map regions re-extract in place. Bundles refresh from their source repo.
 - ✅ **Disaster-recovery image** — admin console's Backup page produces a flashable `.img` of the appliance onto a USB drive. Flash the resulting image to a fresh microSD with [Etcher](https://etcher.balena.io/) or [Raspberry Pi Imager](https://www.raspberrypi.com/software/) and boot it: a one-shot first-boot service grows the rootfs to fill the destination card and regenerates SSH host keys, leaving you with an equivalent device. When `/srv/prepperpi/` lives on a separate volume (M.2 / SSD), the system image stays small and content is saved as a companion `.tar` next to the image. See [`docs/backup-and-recovery.md`](docs/backup-and-recovery.md).
+- ✅ **Config export / import** — admin console's Backup page also produces a small `.tar.gz` (a few KB) capturing AP settings + the list of installed bundles. Importing onto a fresh PrepperPi replaces its AP config and queues every imported bundle for re-download. Use this when you want to recreate your *configuration* on a replacement Pi without lugging content around. See [`docs/backup-and-recovery.md`](docs/backup-and-recovery.md#config-export--import).
 
 **Not yet shipped (planned):**
 
 - Optional offline place-name search and routing
-- Config export / import
 - Signed release images, auto-generated release notes
 
 Star the repo if you want to be notified as each phase lands, or dive into the [roadmap](#roadmap) if you'd like to help build it.
@@ -204,18 +204,17 @@ how to author your own without forking.
 
 **Phase 3 — Admin console and updates.** ✅ **Shipped.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅, **one-click content bundles ✅**, **update notifier ✅**.
 
-**Phase 4 — Polish and release.** ⏳ **In progress.** Disaster-recovery image backup ✅. Still ahead: config export/import, signed release images, auto-generated release notes, documentation, community channels.
+**Phase 4 — Polish and release.** ⏳ **In progress.** Disaster-recovery image backup ✅, config export/import ✅. Still ahead: signed release images, auto-generated release notes, documentation, community channels.
 
 Possible futures (not committed): non-Pi SBC support, an optional offline LLM assistant over your library, mesh between multiple PrepperPis, APRS and Winlink ham-radio integrations.
 
-## Known limitations (alpha)
+## Known limitations (beta)
 
 - **Samsung Galaxy devices (One UI 5 / Android 13)** don't auto-open the captive portal on Wi-Fi attach — a documented vendor quirk that every captive portal hits. Workaround: after connecting, open a browser and type any URL; the portal will load. Stock Android (Pixel etc.) is expected to auto-pop but hasn't been tested on hardware.
 - **Pi 5 is not yet verified end-to-end.** All development and testing so far has been on a Pi 4B 8 GB. Pi 5 support is in the code (`pi_model_default_max_sta` differentiates them, raspi-firmware installs for both) but a fresh flash-and-boot test on a Pi 5 is still pending hardware availability.
 - **Maps downloader is one-shot, not resumable.** Each `pmtiles extract` runs to completion or you start over. For most countries (50–500 MB) this is fine; the few giant ones (US ≈ 1.5 GB, Russia ≈ 1.2 GB) become long jobs that hurt to interrupt. Pause/resume isn't on the roadmap.
 - **Online mode is Ethernet-only by design.** No Wi-Fi role-swap on the onboard radio (avoids dropping the AP). A USB Wi-Fi dongle would let the Pi be a Wi-Fi client *and* keep the AP up — that's a stretch story, not shipped.
-- **No content downloader UI.** Today you supply ZIMs by `cp` over SSH or by dropping them onto a USB. An in-browser catalog selector is on the roadmap.
-- **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are Phase 4.
+- **No Release artifacts on GitHub.** For now, you build images locally or use the installer path. Tag-triggered GitHub Releases with GPG-signed artifacts are the last item on the road to 1.0.
 - **Some ZIM index pages have visible category lists with no clickable links.** WikEM's "Notes by Categories", Art of Problem Solving's main page, and a handful of other wiki-derived ZIMs render their index as plain text (`<li>Cardiology (304 pages)</li>`) instead of links. The articles themselves are present in the ZIM — use the kiwix search box at the top of the viewer to jump to any title. The cause is upstream: Kiwix's `mwoffliner` scraper couldn't render the live MediaWiki category template at scrape time and fell back to a flat text dump. Re-scraping with a complete template would fix it but happens at the source, not on the appliance.
 - **PDF rendering on Chrome for Android always downloads.** Chrome on Android has no built-in PDF viewer, so it always downloads regardless of `Content-Disposition: inline`. Workarounds: install a PDF viewer app (Adobe Reader, Google PDF Viewer) and tap the downloaded file, or switch browsers — Firefox for Android renders PDFs inline once you cancel the initial "Open with…" prompt. Desktop Chrome / Firefox / Edge / Safari and iOS Safari all render kiwix-served PDFs inline natively.
 

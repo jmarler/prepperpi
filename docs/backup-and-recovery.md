@@ -1,12 +1,23 @@
 # Backup and recovery
 
-PrepperPi can produce a **disaster-recovery image** of itself onto a USB
-drive: a flashable `.img` you write to a fresh microSD card with
-[Etcher](https://etcher.balena.io/) or
-[Raspberry Pi Imager](https://www.raspberrypi.com/software/), boot, and
-end up with an equivalent device. When your content lives on a separate
-SSD/M.2, the system image stays small and content is saved as a
-companion `.tar` next to the image.
+PrepperPi gives you two backup tools, useful in different situations:
+
+- **Disaster-recovery image** — a flashable `.img` written to a USB
+  drive. Use [Etcher](https://etcher.balena.io/) or
+  [Raspberry Pi Imager](https://www.raspberrypi.com/software/) to write
+  it onto a fresh microSD; boot, and end up with an equivalent device.
+  When your content lives on a separate SSD/M.2, the system image stays
+  small and content is saved as a companion `.tar` next to the image.
+- **Config export / import** — a tiny `.tar.gz` (a few KB) capturing
+  AP settings + the list of bundles you installed. Doesn't include
+  any content. Use this when you want to move *configuration* to a
+  replacement Pi, then let the new Pi re-download content fresh.
+
+The disaster-recovery image is the right tool when you want to clone a
+device byte-for-byte, including everything you've downloaded. The config
+export is the right tool when you have a fresh PrepperPi and just want
+to give it the same starting setup as a previous one without lugging
+content around.
 
 ## What you need
 
@@ -130,6 +141,80 @@ prepperpi-content-*.tar -C /srv` directly onto a freshly-formatted ext4
 volume from your laptop. Plug it into the Pi after flashing the
 system image, and the appliance will mount it as `/srv/prepperpi`
 without the in-UI restore step.
+
+## Config export / import
+
+The config export captures the bits of the appliance you actually
+*configured*, without any of the content. The bundle is a small
+`.tar.gz` (a few KB) containing a single `manifest.json`:
+
+- AP settings — SSID, Wi-Fi password, channel, country (read from
+  `/boot/firmware/prepperpi.conf`).
+- The list of bundles you've clicked Install on (qualified IDs, e.g.
+  `official:starter`).
+- A `schema_version` so future PrepperPi versions can recognize and
+  reject incompatible exports.
+
+### Exporting
+
+**Admin → Backup → Config export / import → Export config.** Your
+browser downloads a file named
+`prepperpi-config-<host>-<utc-timestamp>.tar.gz`. Stash it somewhere
+safe — a USB stick, a password manager, your laptop. Same opsec as a
+network-config screenshot: the file does contain your Wi-Fi password
+in plaintext, just like `/boot/firmware/prepperpi.conf` does on the
+SD card itself.
+
+### Importing onto a fresh PrepperPi
+
+1. Flash and boot a stock PrepperPi image. Connect to its AP.
+2. Open **Admin → Backup → Config export / import → Import config**.
+3. Pick your `prepperpi-config-*.tar.gz` and click **Import**.
+4. Confirm the prompt. PrepperPi will:
+   - Apply the imported AP settings (the AP will re-key — you'll need
+     to rejoin with the imported SSID + password after a few seconds).
+   - Replace its installed-bundles registry with the imported list.
+   - Queue every imported bundle for download.
+   - Trigger an updates check so the dashboard reflects the new state.
+
+### What "import" means, exactly
+
+Imports are **authoritative replace, not merge**. Whatever was on the
+target device before — different SSID, different bundle list — gets
+overwritten by what's in the export. There is no "are you sure" diff
+page beyond the upload itself; uploading and clicking Import is the
+confirmation.
+
+Per-bundle failures don't abort the import. If a bundle in your export
+is no longer in the target's `sources.json` (e.g. you imported an old
+config after pruning a community source), the bundle is reported as
+failed and the import continues for the rest. The page reload shows
+which bundles failed and why.
+
+Network apply has its own atomic rollback inside
+`apply-network-config`; if the new AP config is broken (e.g. invalid
+country code), the worker restores the prior config and the import
+fails fast before touching bundles.
+
+### What's *not* in the export
+
+- Content (ZIMs, maps, static files) — the import re-queues downloads
+  instead. If your target has no uplink, those queued items will sit
+  in aria2 until uplink returns.
+- Wi-Fi *uplink* credentials — uplink configuration isn't surfaced in
+  the admin UI today (Ethernet only); when uplink Wi-Fi support lands,
+  this list will grow.
+- USB write-toggle state — by design, that toggle is session-only and
+  resets on every re-plug.
+- The Kiwix catalog cache or any per-item update pins — those are
+  derived state that the target rebuilds itself.
+
+### Schema versions
+
+The current schema is `v1`. If a future PrepperPi adds fields, it will
+keep accepting v1 exports. If you try to import an export from a
+*newer* PrepperPi onto an *older* one, the import fails with a clear
+message — upgrade the target first.
 
 ## What's *not* in the backup
 

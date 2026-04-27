@@ -26,8 +26,8 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -35,7 +35,9 @@ import aria2
 import bundles as bundles_mod
 import bundles_install
 import catalog
+import config_io
 import health
+import installed_bundles
 import maps
 import updates as updates_mod
 import updates_apply
@@ -1167,10 +1169,22 @@ def bundles_refresh():
     return RedirectResponse("/admin/bundles?ok=Sources+refreshed", status_code=303)
 
 
-@app.post("/admin/bundles/{qualified_id}/install")
-def bundles_install_endpoint(qualified_id: str):
+def _resolve_and_queue_bundle(qualified_id: str) -> tuple[str, str]:
+    """Resolve `qualified_id`, queue its items into aria2 / the maps
+    queue, and record the bundle in the installed-bundles registry.
+
+    Returns (status, message) where status is one of:
+      "ok"        — queued (or already in flight) and recorded
+      "bad_id"    — malformed qualified_id
+      "not_found" — no such bundle in the cached/built-in indices
+      "empty"     — bundle resolves to zero items
+      "no_fit"    — bundle won't fit in internal storage
+
+    Used by the bundle Install button and by config import. We always
+    record on `ok`, even when nothing was newly queued, because the
+    user has expressed intent to have this bundle installed."""
     if ":" not in qualified_id:
-        raise HTTPException(status_code=400, detail="bundle id must be source:id")
+        return "bad_id", "bundle id must be source:id"
     source_id, _, bundle_id = qualified_id.partition(":")
 
     bs, _ = _all_bundles()
@@ -1179,16 +1193,11 @@ def bundles_install_endpoint(qualified_id: str):
         None,
     )
     if bundle is None:
-        raise HTTPException(status_code=404, detail="bundle not found")
+        return "not_found", "bundle not found"
     if bundle.resolved_size_bytes == 0 and not bundle.resolved_items:
-        raise HTTPException(
-            status_code=409, detail="bundle has no resolvable items"
-        )
+        return "empty", "bundle has no resolvable items"
     if bundle.resolved_size_bytes > _internal_free_bytes():
-        return RedirectResponse(
-            "/admin/bundles?err=Bundle+won%27t+fit+in+internal+storage",
-            status_code=303,
-        )
+        return "no_fit", "Bundle won't fit in internal storage"
 
     queued_zims = 0
     queued_statics = 0
@@ -1235,7 +1244,9 @@ def bundles_install_endpoint(qualified_id: str):
             BUNDLE_CACHE_DIR / "last-drainer.log"
         )
 
-    summary_parts = []
+    installed_bundles.record_installed(qualified_id)
+
+    summary_parts: list[str] = []
     if queued_zims:
         summary_parts.append(f"{queued_zims} ZIM(s)")
     if queued_statics:
@@ -1243,14 +1254,25 @@ def bundles_install_endpoint(qualified_id: str):
     if queued_regions:
         summary_parts.append(f"{len(queued_regions)} map region(s)")
     if not summary_parts:
+        return "ok", "nothing new to queue (items already in flight)"
+    return "ok", ", ".join(summary_parts)
+
+
+@app.post("/admin/bundles/{qualified_id}/install")
+def bundles_install_endpoint(qualified_id: str):
+    status, msg = _resolve_and_queue_bundle(qualified_id)
+    if status == "bad_id":
+        raise HTTPException(status_code=400, detail=msg)
+    if status == "not_found":
+        raise HTTPException(status_code=404, detail=msg)
+    if status == "empty":
+        raise HTTPException(status_code=409, detail=msg)
+    if status == "no_fit":
         return RedirectResponse(
-            "/admin/bundles?err=Nothing+to+queue+(items+already+in+flight%3F)",
-            status_code=303,
+            "/admin/bundles?err=" + _quote_msg(msg), status_code=303
         )
-    summary = ", ".join(summary_parts)
     return RedirectResponse(
-        f"/admin/bundles?ok=Queued+{summary}",
-        status_code=303,
+        f"/admin/bundles?ok=Queued+{_quote_msg(msg)}", status_code=303,
     )
 
 
@@ -1752,3 +1774,171 @@ def backup_restore(
     if not ok:
         return _backup_redirect(err_msg=f"Restore failed: {msg}")
     return _backup_redirect(ok_msg="Content restored.")
+
+
+# ---------- config export / import ----------
+#
+# Lightweight sibling of disaster-recovery backup. Captures the
+# admin-managed bits of the appliance (AP settings + the list of
+# bundles the user installed) into a small tarball that imports onto
+# any fresh PrepperPi to recreate the configuration. Content itself is
+# not in the export — bundle re-downloads are queued on import.
+
+UPDATES_CHECK_SCRIPT = Path(
+    "/opt/prepperpi/services/prepperpi-admin/prepperpi-updates-check"
+)
+# Hard cap on uploaded config tarballs. The manifest is a few KB; even
+# with future expansion the export should never approach 1 MiB. 5 MiB
+# leaves headroom while making targeted-DoS uploads unattractive.
+CONFIG_IMPORT_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _kick_updates_check_async() -> None:
+    """Fire prepperpi-updates-check as a detached subprocess. Same code
+    path the timer / NM dispatcher already use; we just don't want to
+    block the import response on the network round-trips inside the
+    check (catalog HEADs, bundle source fetches). Best-effort: the
+    timer will run it again later if this fails."""
+    if not UPDATES_CHECK_SCRIPT.exists():
+        return
+    log = BUNDLE_CACHE_DIR / "last-updates-check.log"
+    try:
+        log.parent.mkdir(parents=True, exist_ok=True)
+        fh = log.open("ab")
+    except OSError:
+        return
+    try:
+        subprocess.Popen(
+            ["/usr/bin/python3", str(UPDATES_CHECK_SCRIPT)],
+            stdout=fh,
+            stderr=fh,
+            stdin=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+        )
+    except OSError:
+        pass
+    finally:
+        fh.close()
+
+
+def _export_filename() -> str:
+    """`prepperpi-config-<host>-<utc-timestamp>.tar.gz`. Hostname is
+    sanitized so it always lands on a usable filename — uname().nodename
+    can technically contain odd characters."""
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    raw_host = os.uname().nodename or "prepperpi"
+    safe_host = re.sub(r"[^A-Za-z0-9_-]", "-", raw_host)[:32] or "prepperpi"
+    return f"prepperpi-config-{safe_host}-{ts}.tar.gz"
+
+
+@app.get("/admin/backup/config-export")
+def config_export_endpoint():
+    """Stream the v1 config tarball back as a download. Built in-process
+    — the payload is a few KB, no need for a privileged worker."""
+    network = read_config()
+    bundles = installed_bundles.read_installed()
+    manifest = config_io.build_manifest(
+        network=network,
+        bundles=bundles,
+        host=os.uname().nodename or "prepperpi",
+    )
+    blob = config_io.manifest_to_tarball_bytes(manifest)
+    return Response(
+        content=blob,
+        media_type="application/gzip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{_export_filename()}"',
+        },
+    )
+
+
+@app.post("/admin/backup/config-import")
+async def config_import_endpoint(file: UploadFile = File(...)):
+    """Authoritative replace. Wipes existing AP config + the installed
+    bundles registry; applies the imported network spec via the
+    privileged worker; re-queues each bundle in the manifest. Per-bundle
+    failures are surfaced individually — the import does not roll back
+    on partial bundle failure (per Jon 2026-04-27: failures fail, the
+    user deals with it). Network apply, however, has its own atomic
+    rollback in apply-network-config."""
+    blob = await file.read(CONFIG_IMPORT_MAX_BYTES + 1)
+    if len(blob) > CONFIG_IMPORT_MAX_BYTES:
+        return _backup_redirect(
+            err_msg=f"Upload too large (>{CONFIG_IMPORT_MAX_BYTES} bytes)."
+        )
+    if not blob:
+        return _backup_redirect(err_msg="No file uploaded.")
+
+    try:
+        manifest = config_io.parse_tarball(blob)
+    except config_io.ConfigIOError as exc:
+        return _backup_redirect(err_msg=str(exc))
+
+    # Network apply. An export taken before the AP was ever configured
+    # has SSID="" — that's factory state on the source. Round-trip it
+    # to factory state on the target via action=reset rather than
+    # bouncing off validate_locally's "SSID required" check.
+    net = manifest["network"]
+    if not str(net.get("ssid", "")).strip():
+        ok, msg = call_wrapper({"action": "reset"})
+        if not ok:
+            return _backup_redirect(err_msg=f"Network reset failed: {msg}")
+        network_apply_summary = "Network reset to factory defaults"
+    else:
+        network_spec = {
+            "action": "set",
+            "ssid": net.get("ssid", ""),
+            "wifi_password": net.get("wifi_password", ""),
+            "channel": net.get("channel", "auto"),
+            "country": net.get("country", "US"),
+        }
+        field_errs = validate_locally({
+            "ssid": network_spec["ssid"],
+            "wifi_password": network_spec["wifi_password"],
+            "channel": network_spec["channel"],
+            "country": network_spec["country"],
+        })
+        if field_errs:
+            return _backup_redirect(
+                err_msg="Imported network spec is invalid: " + " ".join(field_errs)
+            )
+        ok, msg = call_wrapper(network_spec)
+        if not ok:
+            return _backup_redirect(err_msg=f"Network apply failed: {msg}")
+        network_apply_summary = "Network applied"
+
+    # Bundles: authoritative replace, but only record what actually
+    # queued. Wipe first; _resolve_and_queue_bundle re-records on each
+    # successful queue. Bundles that fail to resolve don't end up in
+    # the registry — keeps stale qids from outliving their source's
+    # disappearance, and keeps export round-tripping honest.
+    qids = manifest.get("bundles") or []
+    installed_bundles.replace_all([])
+
+    succeeded: list[str] = []
+    failed: list[tuple[str, str]] = []
+    for qid in qids:
+        status, m = _resolve_and_queue_bundle(qid)
+        if status == "ok":
+            succeeded.append(qid)
+        else:
+            failed.append((qid, m))
+
+    # Nudge the updates dashboard so it reflects the new state without
+    # waiting up to 6h for the next timer tick.
+    _kick_updates_check_async()
+
+    parts: list[str] = [network_apply_summary]
+    if succeeded:
+        parts.append(f"{len(succeeded)} bundle(s) queued")
+    if failed:
+        # Surface every failure verbatim — per-bundle errors are useful
+        # (e.g. "bundle not found" tells the user the bundle source
+        # they relied on is no longer in their sources.json).
+        parts.append(
+            f"{len(failed)} bundle(s) failed — "
+            + "; ".join(f"{q}: {m}" for q, m in failed)
+        )
+        return _backup_redirect(err_msg=", ".join(parts))
+    return _backup_redirect(ok_msg=", ".join(parts) + ".")
