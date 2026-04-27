@@ -48,6 +48,7 @@ STATIC_DIR = APP_DIR / "static"
 CONF_FILE = Path("/boot/firmware/prepperpi.conf")
 APPLY_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-network-config"
 STORAGE_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-storage-action"
+BACKUP_CMD = "/opt/prepperpi/services/prepperpi-admin/manage-backup"
 EVENTS_FILE = Path("/opt/prepperpi/web/landing/_events.json")
 USB_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
@@ -1489,3 +1490,265 @@ def _quote_msg(msg: str) -> str:
     """URL-quote the flash message into a redirect query string."""
     from urllib.parse import quote
     return quote(msg, safe="")
+
+
+# ---------- backup / disaster-recovery -------------------------------
+
+# Jinja filter so the backup template can show `os.path.basename(p)`
+# without exposing `os` to the template namespace.
+templates.env.filters["basename"] = lambda p: os.path.basename(str(p)) if p else ""
+
+USB_PARENT = Path("/srv/prepperpi/user-usb")
+
+
+def _detect_source_layout() -> dict:
+    """Inspect the live system to surface info the backup template needs.
+
+    Returns:
+        {
+            "rootfs_dev": "/dev/mmcblk0p2",
+            "rootfs_total_bytes": int,
+            "rootfs_used_bytes": int,
+            "srv_dev": "/dev/...",
+            "srv_used_bytes": int,
+            "srv_separate": bool,
+        }
+    """
+    def _findmnt(mountpoint: str) -> Optional[str]:
+        try:
+            out = subprocess.run(
+                ["findmnt", "-nT", mountpoint, "-o", "SOURCE"],
+                capture_output=True, text=True, timeout=5,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+        return out.stdout.strip() or None
+
+    def _used_bytes(mountpoint: str) -> int:
+        try:
+            st = os.statvfs(mountpoint)
+        except OSError:
+            return 0
+        return st.f_frsize * (st.f_blocks - st.f_bfree)
+
+    def _total_bytes(mountpoint: str) -> int:
+        try:
+            st = os.statvfs(mountpoint)
+        except OSError:
+            return 0
+        return st.f_frsize * st.f_blocks
+
+    rootfs_dev = _findmnt("/") or ""
+    srv_dev = _findmnt("/srv/prepperpi") or rootfs_dev
+    srv_separate = srv_dev != rootfs_dev and srv_dev != ""
+
+    if srv_separate:
+        srv_used = _used_bytes("/srv/prepperpi")
+    else:
+        # /srv on rootfs: include only what's actually under /srv/prepperpi.
+        try:
+            out = subprocess.run(
+                ["du", "-sxB1", "/srv/prepperpi"],
+                capture_output=True, text=True, timeout=10,
+            )
+            srv_used = int(out.stdout.split()[0]) if out.returncode == 0 else 0
+        except (subprocess.TimeoutExpired, OSError, ValueError):
+            srv_used = 0
+
+    return {
+        "rootfs_dev": rootfs_dev,
+        "rootfs_total_bytes": _total_bytes("/"),
+        "rootfs_used_bytes": _used_bytes("/"),
+        "srv_dev": srv_dev,
+        "srv_used_bytes": srv_used,
+        "srv_separate": srv_separate,
+    }
+
+
+def _enumerate_backup_usbs() -> list[dict]:
+    """List USBs under /srv/prepperpi/user-usb/<label>/ that are
+    currently *mounted*. A bare empty dir left over from an unplug
+    must NOT count as an attached drive — statvfs() of an empty
+    mountpoint returns the rootfs's stats, which would falsely show
+    a huge "USB" with the rootfs's free space.
+
+    Read-write state comes from /proc/1/mounts (host's view), since
+    the daemon's own mount namespace can mask rw remounts done after
+    namespace setup.
+    """
+    out: list[dict] = []
+    if not USB_PARENT.is_dir():
+        return out
+    try:
+        mountinfo = Path("/proc/1/mountinfo").read_text().splitlines()
+    except OSError:
+        return out
+    mounted: dict[str, bool] = {}
+    for line in mountinfo:
+        # Format: id parent maj:min root mountpoint opts ...
+        parts = line.split()
+        if len(parts) < 6:
+            continue
+        if not parts[4].startswith(str(USB_PARENT) + "/"):
+            continue
+        mounted[parts[4]] = "rw" in parts[5].split(",")
+    for usb_path, writable in sorted(mounted.items()):
+        try:
+            st = os.statvfs(usb_path)
+        except OSError:
+            continue
+        out.append({
+            "label": Path(usb_path).name,
+            "path": usb_path,
+            "total_bytes": st.f_frsize * st.f_blocks,
+            "free_bytes": st.f_frsize * st.f_bavail,
+            "writable": writable,
+        })
+    return out
+
+
+def _list_existing_backups() -> list[dict]:
+    """Enumerate backup .img files (and matching .tar) across all USBs."""
+    payload = json.dumps({"action": "list"})
+    try:
+        proc = subprocess.run(
+            ["sudo", "-n", BACKUP_CMD],
+            input=payload, capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+    if proc.returncode != 0:
+        return []
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return []
+    return data.get("backups", []) or []
+
+
+def _read_backup_status() -> dict:
+    payload = json.dumps({"action": "status"})
+    try:
+        proc = subprocess.run(
+            ["sudo", "-n", BACKUP_CMD],
+            input=payload, capture_output=True, text=True, timeout=10,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return {"phase": "unknown"}
+    if proc.returncode != 0:
+        return {"phase": "unknown"}
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        return {"phase": "unknown"}
+
+
+@app.get("/admin/backup", response_class=HTMLResponse)
+def backup_get(
+    request: Request,
+    ok: Optional[str] = None,
+    err: Optional[str] = None,
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "backup.html",
+        {
+            "request": request,
+            "active": "backup",
+            "source": _detect_source_layout(),
+            "usbs": _enumerate_backup_usbs(),
+            "status": _read_backup_status(),
+            "backups": _list_existing_backups(),
+            "format_bytes": health.format_bytes,
+            "ok": ok,
+            "err": err,
+        },
+    )
+
+
+@app.get("/admin/backup/status")
+def backup_status_endpoint() -> dict:
+    return _read_backup_status()
+
+
+def _backup_redirect(ok_msg: Optional[str] = None, err_msg: Optional[str] = None) -> RedirectResponse:
+    """Redirect back to /admin/backup with a flash query string. The
+    backup template renders `ok` / `err` from the query at the top of
+    the page so users see what happened without raw JSON 500s."""
+    if err_msg:
+        return RedirectResponse(
+            "/admin/backup?err=" + _quote_msg(err_msg), status_code=303
+        )
+    if ok_msg:
+        return RedirectResponse(
+            "/admin/backup?ok=" + _quote_msg(ok_msg), status_code=303
+        )
+    return RedirectResponse("/admin/backup", status_code=303)
+
+
+@app.post("/admin/backup/create")
+def backup_create(
+    usb_label: str = Form(...),
+    include_content: Optional[str] = Form(None),
+    include_secrets: Optional[str] = Form(None),
+):
+    if not USB_NAME_RE.match(usb_label):
+        return _backup_redirect(err_msg="invalid USB label")
+    output_dir = USB_PARENT / usb_label
+    if not output_dir.is_dir():
+        return _backup_redirect(err_msg=f"USB not found: {usb_label}")
+    # Pre-flight: refuse if the USB is mounted read-only on the host —
+    # surface a specific message pointing at the Storage page rather
+    # than letting the worker fail mid-mkfs. The daemon sees its own
+    # namespace's view (where ProtectSystem=strict makes user-usb ro
+    # regardless of the underlying device), so we read /proc/1/mountinfo
+    # which always reflects the host's actual mount options.
+    try:
+        mountinfo = Path("/proc/1/mountinfo").read_text().splitlines()
+    except OSError:
+        mountinfo = []
+    for line in mountinfo:
+        # Format: id parent maj:min root mountpoint opts ... - fstype src super_opts
+        parts = line.split()
+        if len(parts) < 6 or parts[4] != str(output_dir):
+            continue
+        if "ro" in parts[5].split(","):
+            return _backup_redirect(
+                err_msg=f"USB '{usb_label}' is mounted read-only. "
+                        "Open the Storage page and click 'Make writable'."
+            )
+        break
+    payload = {
+        "action": "create",
+        "output_dir": str(output_dir),
+        "include_content": include_content == "1",
+        "include_secrets": include_secrets == "1",
+    }
+    ok, msg = call_wrapper(payload, cmd=BACKUP_CMD, timeout=20)
+    if not ok:
+        return _backup_redirect(err_msg=f"Backup failed to start: {msg}")
+    return _backup_redirect(ok_msg="Backup started — refresh to see progress.")
+
+
+@app.post("/admin/backup/cancel")
+def backup_cancel():
+    ok, msg = call_wrapper({"action": "cancel"}, cmd=BACKUP_CMD, timeout=10)
+    if not ok:
+        return _backup_redirect(err_msg=f"Cancel failed: {msg}")
+    return _backup_redirect(ok_msg="Cancel signal sent.")
+
+
+@app.post("/admin/backup/restore")
+def backup_restore(
+    tar: str = Form(...),
+    force: Optional[str] = Form(None),
+):
+    # Path is validated again by manage-backup; this is just shape-check.
+    if not tar.startswith(str(USB_PARENT) + "/"):
+        return _backup_redirect(err_msg="tar must be under /srv/prepperpi/user-usb/")
+    payload = {"action": "restore", "tar": tar, "force": force == "1"}
+    # Restore is synchronous in the worker (extracts tarball with progress).
+    # Give it a generous timeout — content tarballs can be hundreds of GB.
+    ok, msg = call_wrapper(payload, cmd=BACKUP_CMD, timeout=24 * 3600)
+    if not ok:
+        return _backup_redirect(err_msg=f"Restore failed: {msg}")
+    return _backup_redirect(ok_msg="Content restored.")

@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""manage-backup — privileged worker for the disaster-recovery backup UI.
+
+Reads a JSON spec from stdin and dispatches to the underlying shell
+scripts (backup-image.sh, restore-content.sh) or to small read-only
+operations (list, status). Runs as root via sudo from prepperpi-admin.
+
+Actions (read from stdin as `{"action": "...", ...}`):
+
+  estimate       — invoke backup-image.sh --estimate; return JSON
+                   describing planned outputs + sizes.
+                   {"action":"estimate","output_dir":..,"include_content":..,
+                    "include_secrets":..}
+
+  create         — spawn backup-image.sh detached; write status to
+                   STATE_FILE; return {"pid": N, "status_file": "..."}.
+                   Same shape as estimate, plus optional flags.
+
+  status         — read STATE_FILE and return its JSON. {"action":"status"}.
+
+  cancel         — SIGTERM the running pid from STATE_FILE if any.
+                   {"action":"cancel"}.
+
+  list           — enumerate produced images + tarballs across all USBs.
+                   {"action":"list"}.
+
+  restore        — invoke restore-content.sh.
+                   {"action":"restore","tar":"...","force":false}.
+
+Stdout: JSON only, on the last line. Progress / log noise → stderr.
+Exit codes: 0 OK, 1 action failed, 2 invalid input.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+STATE_DIR = Path("/var/lib/prepperpi/backup")
+STATE_FILE = STATE_DIR / "status.json"
+LOG_FILE = STATE_DIR / "last-run.log"
+
+# Allowed output dirs: only under /srv/prepperpi/user-usb/<label>/. Anything
+# else would be unsafe — we don't want a malicious payload pointing the
+# backup at /etc and overwriting host config, or filling up the rootfs.
+USB_PARENT = Path("/srv/prepperpi/user-usb")
+
+BACKUP_SCRIPT = Path("/opt/prepperpi/services/prepperpi-admin/backup-image.sh")
+RESTORE_SCRIPT = Path("/opt/prepperpi/services/prepperpi-admin/restore-content.sh")
+
+# A backup creation needs /dev access (losetup, mkfs.ext4 on /dev/loopN)
+# AND writes to /srv/prepperpi/user-usb/, both of which are blocked
+# inside the prepperpi-admin daemon's PrivateDevices/ReadWritePaths
+# sandbox. Launching via systemd-run produces a fresh transient unit
+# under PID 1 with no inherited restrictions. nsenter alone is
+# insufficient — it changes namespace view but doesn't escape the
+# device cgroup deny-by-default.
+SYSTEMD_RUN = "/usr/bin/systemd-run"
+BACKUP_UNIT = "prepperpi-backup-create"
+RESTORE_UNIT = "prepperpi-backup-restore"
+
+# Read-only operations (estimate, status, list, cancel) don't need any
+# of that — they live happily inside the daemon's sandbox.
+
+MAX_STDIN_BYTES = 1 << 20  # 1 MiB
+
+
+def err(msg: str, code: int = 1) -> None:
+    print(json.dumps({"ok": False, "error": msg}))
+    sys.exit(code)
+
+
+def _validate_output_dir(p: str) -> Path:
+    """Ensure the output dir is under /srv/prepperpi/user-usb/<label>/.
+    Resolves symlinks; rejects anything escaping the parent."""
+    if not isinstance(p, str) or not p:
+        err("output_dir: must be a non-empty string", 2)
+    path = Path(p).resolve()
+    try:
+        path.relative_to(USB_PARENT.resolve())
+    except ValueError:
+        err(f"output_dir: must be a subdir of {USB_PARENT}", 2)
+    if not path.is_dir():
+        err(f"output_dir: not a directory: {path}", 2)
+    return path
+
+
+def _validate_tar_path(p: str) -> Path:
+    if not isinstance(p, str) or not p:
+        err("tar: must be a non-empty string", 2)
+    path = Path(p).resolve()
+    try:
+        path.relative_to(USB_PARENT.resolve())
+    except ValueError:
+        err(f"tar: must be under {USB_PARENT}", 2)
+    if not path.is_file():
+        err(f"tar: not a file: {path}", 2)
+    if not path.name.startswith("prepperpi-content-") or not path.suffix == ".tar":
+        err("tar: filename must match prepperpi-content-*.tar", 2)
+    return path
+
+
+def _read_state() -> dict:
+    try:
+        return json.loads(STATE_FILE.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {}
+
+
+def _write_state(state: dict) -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = STATE_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(state))
+    tmp.replace(STATE_FILE)
+
+
+def _unit_active(unit: str) -> bool:
+    """systemctl is-active <unit> exits 0 when active, non-zero
+    otherwise. Treat anything other than active as 'not running'."""
+    res = subprocess.run(
+        ["/usr/bin/systemctl", "is-active", "--quiet", unit],
+        capture_output=True,
+    )
+    return res.returncode == 0
+
+
+def _unit_reset_failed(unit: str) -> None:
+    """If a previous run of this unit failed, systemd remembers it as
+    'failed'. Reset so a fresh systemd-run can re-use the same name."""
+    subprocess.run(
+        ["/usr/bin/systemctl", "reset-failed", unit],
+        capture_output=True,
+    )
+
+
+def action_estimate(spec: dict) -> dict:
+    out_dir = _validate_output_dir(spec.get("output_dir", ""))
+    args = [str(BACKUP_SCRIPT), "--output-dir", str(out_dir), "--estimate"]
+    if not spec.get("include_content", True):
+        args.append("--no-content")
+    if spec.get("include_secrets", False):
+        args.append("--include-secrets")
+    # Estimate is read-only (no /dev access after the /sys-based
+    # BOOT_BYTES fix) so it runs fine inside the daemon's sandbox.
+    res = subprocess.run(args, capture_output=True, text=True)
+    if res.returncode != 0:
+        err(f"estimate failed: {res.stderr.strip() or res.stdout.strip()}")
+    try:
+        return json.loads(res.stdout)
+    except json.JSONDecodeError:
+        err(f"estimate produced invalid JSON: {res.stdout!r}")
+        return {}  # unreachable
+
+
+def action_create(spec: dict) -> dict:
+    # Refuse if a backup unit is currently active.
+    if _unit_active(BACKUP_UNIT):
+        err(f"another backup is already running ({BACKUP_UNIT})")
+
+    out_dir = _validate_output_dir(spec.get("output_dir", ""))
+
+    backup_args = [str(BACKUP_SCRIPT), "--output-dir", str(out_dir)]
+    if not spec.get("include_content", True):
+        backup_args.append("--no-content")
+    if spec.get("include_secrets", False):
+        backup_args.append("--include-secrets")
+    if spec.get("sha256", "yes") == "no":
+        backup_args.extend(["--sha256", "no"])
+
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    # Truncate log: each run starts with a fresh log file.
+    LOG_FILE.write_bytes(b"")
+
+    # Reset the unit if a previous run failed so the same unit name
+    # can be reused (otherwise systemd-run would refuse).
+    _unit_reset_failed(BACKUP_UNIT)
+
+    # Spawn as a transient unit. --no-block returns once systemd has
+    # accepted the request; --collect garbage-collects the unit when
+    # done. The unit runs in PID 1's full context — no inherited
+    # sandboxing — so it can losetup, mkfs, and write to USB.
+    cmd = [
+        SYSTEMD_RUN, "--no-block", "--collect",
+        f"--unit={BACKUP_UNIT}",
+        "--property=Type=oneshot",
+        f"--property=StandardOutput=append:{LOG_FILE}",
+        f"--property=StandardError=append:{LOG_FILE}",
+        "--",
+    ] + backup_args
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        err(f"systemd-run failed: {res.stderr.strip() or res.stdout.strip()}")
+
+    state = {
+        "phase": "running",
+        "unit": BACKUP_UNIT,
+        "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "output_dir": str(out_dir),
+        "include_content": bool(spec.get("include_content", True)),
+        "include_secrets": bool(spec.get("include_secrets", False)),
+        "log_file": str(LOG_FILE),
+    }
+    _write_state(state)
+    return {"ok": True, "unit": BACKUP_UNIT, "status_file": str(STATE_FILE)}
+
+
+def action_status(_spec: dict) -> dict:
+    state = _read_state()
+    if not state:
+        return {"ok": True, "phase": "idle"}
+    unit = state.get("unit")
+    # Reconcile: if the unit is gone, it has exited. Reflect terminal state.
+    if isinstance(unit, str) and state.get("phase") == "running" and not _unit_active(unit):
+        # The bash script does an atomic rename only on success, so the
+        # absence of any .partial in output_dir + presence of a final
+        # .img is a strong success signal.
+        out_dir = Path(state.get("output_dir", ""))
+        partials = list(out_dir.glob("prepperpi-*.partial"))
+        finals = list(out_dir.glob("prepperpi-system-*.img"))
+        if not partials and finals:
+            state["phase"] = "succeeded"
+        else:
+            state["phase"] = "failed"
+        state["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        _write_state(state)
+    return {"ok": True, **state}
+
+
+def action_cancel(_spec: dict) -> dict:
+    state = _read_state()
+    unit = state.get("unit", BACKUP_UNIT)
+    if not _unit_active(unit):
+        return {"ok": True, "result": "no backup running"}
+    subprocess.run(
+        ["/usr/bin/systemctl", "kill", "--signal=TERM", unit],
+        capture_output=True,
+    )
+    state["phase"] = "cancelled"
+    state["cancelled_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _write_state(state)
+    return {"ok": True, "result": "cancel signal sent", "unit": unit}
+
+
+def action_list(_spec: dict) -> dict:
+    """Enumerate produced backups across all USBs."""
+    out: list[dict] = []
+    if not USB_PARENT.is_dir():
+        return {"ok": True, "backups": out}
+    for usb in sorted(USB_PARENT.iterdir()):
+        if not usb.is_dir():
+            continue
+        for img in sorted(usb.glob("prepperpi-system-*.img")):
+            sidecar = img.with_suffix(".img.json")
+            entry: dict = {
+                "image": str(img),
+                "image_size_bytes": img.stat().st_size,
+                "usb_label": usb.name,
+            }
+            try:
+                entry["sidecar"] = json.loads(sidecar.read_text())
+            except (FileNotFoundError, json.JSONDecodeError):
+                entry["sidecar"] = None
+
+            # Pair with content tar if present (matched by hostname + ts).
+            stem = img.name[len("prepperpi-system-"):-len(".img")]
+            tar = usb / f"prepperpi-content-{stem}.tar"
+            if tar.is_file():
+                entry["content_tar"] = str(tar)
+                entry["content_tar_size_bytes"] = tar.stat().st_size
+                tar_sidecar = tar.with_suffix(".tar.json")
+                try:
+                    entry["content_tar_sidecar"] = json.loads(tar_sidecar.read_text())
+                except (FileNotFoundError, json.JSONDecodeError):
+                    entry["content_tar_sidecar"] = None
+            out.append(entry)
+    return {"ok": True, "backups": out}
+
+
+def action_restore(spec: dict) -> dict:
+    tar = _validate_tar_path(spec.get("tar", ""))
+    force = bool(spec.get("force", False))
+
+    # Restore tar reads /srv/prepperpi/user-usb/<usb>/<...>.tar (which
+    # the daemon namespace can read but not write) and writes to
+    # /srv/prepperpi/ (which IS in the daemon's RW paths). To avoid
+    # the bind-mount confusion we run it in PID 1's context too.
+    _unit_reset_failed(RESTORE_UNIT)
+    cmd_args = [str(RESTORE_SCRIPT), "--tar", str(tar)]
+    if force:
+        cmd_args.append("--force")
+    if spec.get("skip_sha256", False):
+        cmd_args.append("--skip-sha256")
+    args = [
+        SYSTEMD_RUN, "--wait", "--collect",
+        f"--unit={RESTORE_UNIT}",
+        "--property=Type=oneshot",
+        "--",
+    ] + cmd_args
+
+    res = subprocess.run(args, capture_output=True, text=True)
+    if res.returncode != 0:
+        err(f"restore failed: {res.stderr.strip() or res.stdout.strip()}")
+    return {"ok": True, "log": res.stderr.strip()}
+
+
+ACTIONS = {
+    "estimate": action_estimate,
+    "create":   action_create,
+    "status":   action_status,
+    "cancel":   action_cancel,
+    "list":     action_list,
+    "restore":  action_restore,
+}
+
+
+def main() -> int:
+    if os.geteuid() != 0:
+        err("must run as root", 2)
+
+    raw = sys.stdin.buffer.read(MAX_STDIN_BYTES + 1)
+    if len(raw) > MAX_STDIN_BYTES:
+        err("stdin too large", 2)
+    try:
+        spec = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        err(f"stdin: invalid JSON: {exc}", 2)
+        return 2  # unreachable
+
+    if not isinstance(spec, dict):
+        err("stdin: must be a JSON object", 2)
+    action = spec.get("action")
+    if action not in ACTIONS:
+        err(f"unknown action: {action!r}; expected one of {sorted(ACTIONS)}", 2)
+
+    result = ACTIONS[action](spec)
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

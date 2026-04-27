@@ -41,7 +41,7 @@ ReadOnlyPaths=/opt/prepperpi/services/prepperpi-admin
 # even root. UNIX perms still keep the unprivileged uvicorn process
 # (which has no write permission to the file) from touching it
 # directly; only the wrapper, escalated via sudo to root, can write.
-ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps /srv/prepperpi/zim /var/lib/prepperpi/bundles /etc/prepperpi/bundles /var/lib/prepperpi/updates
+ReadWritePaths=/boot/firmware /srv/prepperpi/cache /srv/prepperpi/maps /srv/prepperpi/zim /var/lib/prepperpi/bundles /etc/prepperpi/bundles /var/lib/prepperpi/updates /var/lib/prepperpi/backup
 # /srv/prepperpi/cache for the kiwix-catalog.json cache.
 # /srv/prepperpi/maps for the region-uninstall path: the admin
 # console deletes <region>.mbtiles directly (no privileged worker —

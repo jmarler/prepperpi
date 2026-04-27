@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Backup · Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Backup &amp; recovery</h2>
+<p class="admin-lede">Produce a flashable disaster-recovery image of this PrepperPi onto a USB drive. Use Etcher or Raspberry Pi Imager to write the image onto a fresh microSD if your current SD card dies. Full howto at <a href="/docs/backup-and-recovery.md">docs/backup-and-recovery.md</a>.</p>
+
+{% if ok %}<p class="admin-callout admin-callout--ok" role="status">{{ ok }}</p>{% endif %}
+{% if err %}<p class="admin-callout admin-callout--warn" role="alert">{{ err }}</p>{% endif %}
+
+<section class="admin-section">
+	<h3 class="admin-section__title">Source layout</h3>
+	<dl class="admin-meta-list">
+		<div><dt>Rootfs ({{ source.rootfs_dev }})</dt><dd>{{ format_bytes(source.rootfs_used_bytes) }} used of {{ format_bytes(source.rootfs_total_bytes) }}</dd></div>
+		{% if source.srv_separate %}
+		<div><dt>Content (/srv/prepperpi)</dt><dd>{{ format_bytes(source.srv_used_bytes) }} on a separate volume ({{ source.srv_dev }})</dd></div>
+		{% else %}
+		<div><dt>Content (/srv/prepperpi)</dt><dd>{{ format_bytes(source.srv_used_bytes) }} on the SD-card rootfs</dd></div>
+		{% endif %}
+	</dl>
+</section>
+
+<section class="admin-section" aria-labelledby="backup-status-title">
+	<h3 id="backup-status-title" class="admin-section__title">Status</h3>
+	{% if status.phase == "running" %}
+	<p class="admin-callout admin-callout--info" data-backup-status>
+		Backup running… (started {{ status.started_at }}, pid {{ status.pid }})
+		<form method="post" action="/admin/backup/cancel" style="display:inline">
+			<button type="submit" class="btn btn--danger">Cancel</button>
+		</form>
+	</p>
+	{% elif status.phase == "succeeded" %}
+	<p class="admin-callout admin-callout--ok" data-backup-status>Last backup succeeded ({{ status.finished_at }}).</p>
+	{% elif status.phase == "failed" %}
+	<p class="admin-callout admin-callout--warn" data-backup-status>Last backup failed ({{ status.finished_at }}). See <code>/var/lib/prepperpi/backup/last-run.log</code>.</p>
+	{% elif status.phase == "cancelled" %}
+	<p class="admin-callout admin-callout--warn" data-backup-status>Last backup was cancelled.</p>
+	{% else %}
+	<p class="admin-meta" data-backup-status>No backup in progress.</p>
+	{% endif %}
+</section>
+
+<section class="admin-section">
+	<h3 class="admin-section__title">Create a backup</h3>
+	{% if not usbs %}
+	<p class="admin-callout admin-callout--warn">No USB drives mounted. Plug one in and refresh.</p>
+	{% else %}
+	<form method="post" action="/admin/backup/create" class="admin-form" id="backup-form">
+		<div class="admin-form__field">
+			<label for="usb-select">Destination USB</label>
+			<select name="usb_label" id="usb-select" required>
+				{% for u in usbs %}
+				<option value="{{ u.label }}">{{ u.label }} — {{ format_bytes(u.free_bytes) }} free / {{ format_bytes(u.total_bytes) }} total{% if not u.writable %} (read-only — toggle write on Storage page){% endif %}</option>
+				{% endfor %}
+			</select>
+		</div>
+
+		<div class="admin-form__field admin-form__field--checkbox">
+			<input type="checkbox" name="include_content" id="include-content" value="1" checked>
+			<label for="include-content">Include <code>/srv/prepperpi/</code> ({{ format_bytes(source.srv_used_bytes) }}){% if source.srv_separate %} <em>— content lives on a separate volume; will be saved as a companion .tar</em>{% endif %}</label>
+		</div>
+
+		<div class="admin-form__field admin-form__field--checkbox">
+			<input type="checkbox" name="include_secrets" id="include-secrets" value="1">
+			<label for="include-secrets">Include user-configured network secrets <strong>(unsafe — anyone who flashes this image rejoins your uplink)</strong></label>
+		</div>
+
+		<div class="admin-form__actions">
+			<button type="submit" class="btn btn--primary" {% if status.phase == "running" %}disabled{% endif %}>Create backup</button>
+		</div>
+	</form>
+	{% endif %}
+</section>
+
+<section class="admin-section">
+	<h3 class="admin-section__title">Existing backups</h3>
+	{% if not backups %}
+	<p class="admin-meta">No backups found on attached USBs.</p>
+	{% else %}
+	<ul class="admin-card-list">
+		{% for b in backups %}
+		<li class="admin-card">
+			<div class="admin-card__head">
+				<strong>{{ b.image | basename }}</strong>
+				<span class="admin-card__sub">on {{ b.usb_label }} · {{ format_bytes(b.image_size_bytes) }}</span>
+			</div>
+			{% if b.sidecar %}
+			<dl class="admin-meta-list">
+				<div><dt>Created</dt><dd>{{ b.sidecar.created_at }}</dd></div>
+				<div><dt>Source layout</dt><dd>{{ b.sidecar.source_layout }}</dd></div>
+				<div><dt>Includes content</dt><dd>{{ "yes" if b.sidecar.include_content else "no" }}</dd></div>
+				<div><dt>Includes secrets</dt><dd>{{ "yes" if b.sidecar.include_secrets else "no" }}</dd></div>
+				{% if b.sidecar.image_sha256 %}<div><dt>sha256</dt><dd><code class="admin-meta-mono">{{ b.sidecar.image_sha256[:16] }}…</code></dd></div>{% endif %}
+			</dl>
+			{% endif %}
+			{% if b.content_tar %}
+			<p class="admin-meta">Companion content archive: <code>{{ b.content_tar | basename }}</code> ({{ format_bytes(b.content_tar_size_bytes) }})</p>
+			<form method="post" action="/admin/backup/restore" class="admin-form" onsubmit="return confirm('Extract this backup over /srv/prepperpi/? Existing content will be overwritten.');">
+				<input type="hidden" name="tar" value="{{ b.content_tar }}">
+				<button type="submit" class="btn btn--secondary">Restore content from this archive</button>
+			</form>
+			{% endif %}
+		</li>
+		{% endfor %}
+	</ul>
+	{% endif %}
+</section>
+{% endblock %}

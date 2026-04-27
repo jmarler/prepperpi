@@ -79,7 +79,28 @@ rebuild_fragment() {
   log "fragment rebuilt; ${count} tile(s) rendered"
 }
 
+scrub_dangling_dirs() {
+  # Reap empty non-mountpoint dirs left behind by an unclean unmount or
+  # by rsync from a backup-image build. `rmdir` only succeeds when the
+  # dir is empty, so this is safe — won't disturb a directory the user
+  # has populated for any reason. Real mountpoints are skipped before
+  # we even try.
+  shopt -s nullglob
+  local d
+  for d in "$USB_DIR"/*/; do
+    d="${d%/}"
+    if mountpoint -q "$d" 2>/dev/null; then
+      continue
+    fi
+    if rmdir "$d" 2>/dev/null; then
+      log "scrubbed dangling dir: $d"
+    fi
+  done
+  shopt -u nullglob
+}
+
 main() {
+  scrub_dangling_dirs
   rebuild_fragment
 }
 

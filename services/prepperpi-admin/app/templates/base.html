@@ -27,6 +27,7 @@
 			<span class="admin-nav__badge" aria-label="{{ stale_count }} update(s) available">{{ stale_count }}</span>
 			{% endif %}
 		</a>
+		<a href="/admin/backup" {% if active == "backup" %}aria-current="page" class="admin-nav__active"{% endif %}>Backup</a>
 	</nav>
 
 	<main class="admin-main">
