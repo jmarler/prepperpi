@@ -35,7 +35,6 @@ readonly CONF_DIR=/etc/prepperpi/tileserver
 readonly STATE_DIR=/var/lib/prepperpi/maps
 readonly CACHE_DIR="${STATE_DIR}/cache"
 readonly MAPS_DIR=/srv/prepperpi/maps
-readonly LANDING_DIR="${PREFIX}/web/landing"
 readonly SERVICE_USER="${SERVICE_USER:-prepperpi}"
 readonly SERVICE_GROUP="${SERVICE_GROUP:-prepperpi}"
 readonly ADMIN_USER="${ADMIN_USER:-prepperpi-admin}"

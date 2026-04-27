@@ -89,6 +89,7 @@ require_root() {
 #   "Raspberry Pi 4 Model B Rev 1.5"  -> 4
 #   "Raspberry Pi 5 Model B Rev 1.0"  -> 5
 #   anything else                      -> empty string (unsupported)
+# shellcheck disable=SC2120  # $1 is an optional path override for tests
 detect_pi_model() {
   local src="${1:-/proc/device-tree/model}"
   [[ -r "$src" ]] || { printf ''; return; }
@@ -102,6 +103,7 @@ detect_pi_model() {
 }
 
 # Parse /etc/os-release and return VERSION_CODENAME.
+# shellcheck disable=SC2120  # $1 is an optional path override for tests
 detect_os_codename() {
   local src="${1:-/etc/os-release}"
   [[ -r "$src" ]] || { printf ''; return; }
