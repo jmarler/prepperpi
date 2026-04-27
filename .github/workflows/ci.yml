@@ -1,0 +1,103 @@
+name: CI
+
+# Fast PR / push validation: shellcheck on shell scripts, unit tests on
+# the admin app's pure parsers, YAML sanity on the builtin bundles.
+# Runs on github-hosted ubuntu-latest in well under two minutes.
+#
+# The pi-gen image build is a separate workflow on a beefier runner and
+# only fires on tags — we deliberately keep PR CI fast so it never
+# bottlenecks the review loop.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel in-flight runs for the same PR / branch when new commits land.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          if ! command -v shellcheck >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends shellcheck
+          fi
+          shellcheck --version
+
+      - name: shellcheck shell scripts
+        # severity=warning excludes "info" and "style" — keeps signal
+        # high. SC2329 (functions invoked only via `trap`) and SC2295
+        # (expansion-pattern hint inside ${..#}) trip false positives
+        # on our trap handlers + USB-volume-prefix code; both are info
+        # level and stay out of CI but visible to local runs.
+        run: |
+          shellcheck --severity=warning \
+            installer/install.sh \
+            services/*/*.sh
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install Python test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyyaml
+
+      - name: Run admin app unit tests
+        # Each test file is self-contained (it appends the admin app
+        # dir to sys.path and imports). We don't use a discovery
+        # framework because tests/unit/ has no __init__.py and the
+        # imports are path-mangled per file. Run each directly so a
+        # failure in one doesn't mask the others.
+        run: |
+          set -e
+          fail=0
+          for t in tests/unit/test_*.py; do
+            echo "=== $t ==="
+            if ! python "$t"; then
+              fail=1
+            fi
+          done
+          exit "$fail"
+
+      - name: Validate builtin bundle YAML
+        # Sanity check: every shipped manifest must parse as YAML. The
+        # full schema validator lives in the prepperpi-bundles repo;
+        # this is just the cheap "is this even YAML" gate so a typo'd
+        # manifest can't ride into a release image undetected.
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          import yaml
+
+          fail = False
+          paths = sorted(Path("bundles").rglob("*.yaml"))
+          if not paths:
+              print("::error::no bundle YAML files found under bundles/")
+              sys.exit(1)
+          for p in paths:
+              try:
+                  yaml.safe_load(p.read_text())
+              except yaml.YAMLError as exc:
+                  print(f"::error file={p}::{exc}")
+                  fail = True
+              else:
+                  print(f"  ok  {p}")
+          sys.exit(1 if fail else 0)
+          PY

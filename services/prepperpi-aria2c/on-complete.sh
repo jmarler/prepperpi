@@ -20,8 +20,9 @@ readonly SRC="${3:-}"
 [[ -n "$SRC" ]] || { echo "on-complete: missing path arg" >&2; exit 1; }
 [[ -f "$SRC" ]] || { echo "on-complete: not a file: $SRC" >&2; exit 1; }
 
-readonly STAGING_DIR="$(dirname -- "$SRC")"
-readonly STAGING_NAME="$(basename -- "$STAGING_DIR")"
+STAGING_DIR="$(dirname -- "$SRC")"
+STAGING_NAME="$(basename -- "$STAGING_DIR")"
+readonly STAGING_DIR STAGING_NAME
 
 # Only act on files we actually staged. Anything else (a manual aria2c
 # invocation that didn't use our staging convention) gets left alone.
@@ -30,8 +31,9 @@ if [[ "$STAGING_NAME" != ".downloading" ]]; then
   exit 0
 fi
 
-readonly DEST_DIR="$(dirname -- "$STAGING_DIR")"
-readonly DEST="${DEST_DIR}/$(basename -- "$SRC")"
+DEST_DIR="$(dirname -- "$STAGING_DIR")"
+DEST="${DEST_DIR}/$(basename -- "$SRC")"
+readonly DEST_DIR DEST
 
 # Cross-FS safe: same FS by construction (staging is a child of dest).
 mv -f -- "$SRC" "$DEST"
