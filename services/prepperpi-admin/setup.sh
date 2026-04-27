@@ -101,6 +101,8 @@ install_files() {
   install -m 0644 "${SRC_DIR}/app/updates.py"     "${APP_DST}/updates.py"
   install -m 0644 "${SRC_DIR}/app/updates_state.py" "${APP_DST}/updates_state.py"
   install -m 0644 "${SRC_DIR}/app/updates_apply.py" "${APP_DST}/updates_apply.py"
+  install -m 0644 "${SRC_DIR}/app/installed_bundles.py" "${APP_DST}/installed_bundles.py"
+  install -m 0644 "${SRC_DIR}/app/config_io.py"   "${APP_DST}/config_io.py"
   install -m 0644 "${SRC_DIR}/app/templates/base.html"    "${APP_DST}/templates/base.html"
   install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
   install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"
