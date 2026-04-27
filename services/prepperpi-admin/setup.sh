@@ -109,6 +109,7 @@ install_files() {
   install -m 0644 "${SRC_DIR}/app/templates/maps.html"    "${APP_DST}/templates/maps.html"
   install -m 0644 "${SRC_DIR}/app/templates/bundles.html" "${APP_DST}/templates/bundles.html"
   install -m 0644 "${SRC_DIR}/app/templates/updates.html" "${APP_DST}/templates/updates.html"
+  install -m 0644 "${SRC_DIR}/app/templates/backup.html"  "${APP_DST}/templates/backup.html"
   install -m 0644 "${SRC_DIR}/app/static/admin.css"       "${APP_DST}/static/admin.css"
   install -m 0644 "${SRC_DIR}/app/static/admin.js"        "${APP_DST}/static/admin.js"
 
@@ -119,6 +120,24 @@ install_files() {
                   "${DST_DIR}/apply-network-config"
   install -m 0755 -o root -g root "${SRC_DIR}/apply-storage-action" \
                   "${DST_DIR}/apply-storage-action"
+  install -m 0755 -o root -g root "${SRC_DIR}/manage-backup" \
+                  "${DST_DIR}/manage-backup"
+
+  # Backup helper scripts: the disaster-recovery image creator and the
+  # content-tarball restore worker. Both invoked by manage-backup.
+  install -m 0755 -o root -g root "${SRC_DIR}/backup-image.sh" \
+                  "${DST_DIR}/backup-image.sh"
+  install -m 0755 -o root -g root "${SRC_DIR}/restore-content.sh" \
+                  "${DST_DIR}/restore-content.sh"
+
+  # First-boot worker that runs ONCE on a freshly-flashed clone:
+  # grows the rootfs partition + filesystem to fill the new SD, and
+  # regenerates SSH host keys. Idempotent — safe no-op on a system
+  # that's already in its target state.
+  install -m 0755 -o root -g root "${SRC_DIR}/prepperpi-firstboot.sh" \
+                  "${DST_DIR}/prepperpi-firstboot.sh"
+  install -m 0644 "${SRC_DIR}/prepperpi-firstboot.service" \
+                  /etc/systemd/system/prepperpi-firstboot.service
 
   # Bundle region drainer — runs as the admin user (no sudo); owned
   # root:root mode 0755 so the admin user can exec but not modify.
@@ -152,6 +171,14 @@ ensure_updates_state_dir() {
   log "ensuring updates state dir /var/lib/prepperpi/updates/"
   install -d -m 0755 -o "$ADMIN_USER" -g "$ADMIN_GROUP" \
                   /var/lib/prepperpi/updates
+}
+
+ensure_backup_state_dir() {
+  # manage-backup runs as root via sudo; status.json + last-run.log
+  # land here. Owned root so non-privileged readers see status but
+  # only the worker mutates it.
+  log "ensuring backup state dir /var/lib/prepperpi/backup/"
+  install -d -m 0755 -o root -g root /var/lib/prepperpi/backup
 }
 
 install_bundles() {
@@ -211,11 +238,16 @@ ensure_catalog_cache_dir() {
 }
 
 enable_units() {
-  log "enabling prepperpi-admin.service + updates timer/path"
+  log "enabling prepperpi-admin.service + updates timer/path + firstboot service"
   systemctl daemon-reload
   systemctl enable prepperpi-admin.service
   systemctl enable prepperpi-updates-check.timer
   systemctl enable prepperpi-updates-check.path
+  # prepperpi-firstboot.service is gated by ConditionFirstBoot=yes, so
+  # enabling here on the running appliance is a no-op for this boot. It
+  # only matters for clones flashed from images this appliance later
+  # produces via backup-image.sh.
+  systemctl enable prepperpi-firstboot.service
 }
 
 restart_units() {
@@ -239,6 +271,7 @@ main() {
   ensure_zim_dir_groupwrite
   install_bundles
   ensure_updates_state_dir
+  ensure_backup_state_dir
   enable_units
   restart_units
   log "done. Admin console is active at /admin/."

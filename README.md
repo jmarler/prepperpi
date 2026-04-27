@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, one-click content bundles, and the update notifier are all end-to-end verified on a Pi 4B. Backup and release engineering are still ahead.
+PrepperPi is **alpha**. The base appliance, the content layer, the admin console feature set, the offline-maps tile server, the region downloader, one-click content bundles, the update notifier, and disaster-recovery image backup are all end-to-end verified on a Pi 4B. Config export and release engineering are still ahead.
 
 **What works today:**
 
@@ -35,11 +35,12 @@ PrepperPi is **alpha**. The base appliance, the content layer, the admin console
 - ✅ **Offline maps — region downloader** — admin console catalog of ~200 ISO countries grouped into 8 one-click bundles (NA, LATAM, EU, EMEA, APAC, Oceania, Russia, Antarctica). Click a country (or a bundle, which queues each member sequentially) and PrepperPi extracts just that region's PMTiles directly out of the [mapterhorn.com](https://download.mapterhorn.com/) daily planet via HTTP range requests — no full-planet download required. Pre-flight free-space check, live progress, cancel button. One install at a time
 - ✅ **Content bundles** — curated YAML manifests (Kiwix ZIMs + map regions + optional static files) installable in one click from the admin console's Bundles page. Four official bundles ship in the image (Starter, Complete, Medical, Education); additional bundles can be hosted by anyone — point your Pi at a community-managed source URL from the admin console. See [`docs/creating-bundles.md`](docs/creating-bundles.md) for the schema and how to author your own. Backed by the [`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles) repo
 - ✅ **Update notifier** — admin console's Updates page (and a global nav badge) surfaces ZIMs, map regions, bundle manifests, and bundle static files that have newer versions upstream. Auto-checks every 6 h and on uplink-up via a NetworkManager dispatcher hook; "Check now" button for on-demand. Per-item Update / Pin / Unpin; ZIMs install side-by-side by default, with a "delete old, then update" path for tight-storage cases (no automatic rollback in that path — surfaced in the confirm dialog). Map regions re-extract in place. Bundles refresh from their source repo.
+- ✅ **Disaster-recovery image** — admin console's Backup page produces a flashable `.img` of the appliance onto a USB drive. Flash the resulting image to a fresh microSD with [Etcher](https://etcher.balena.io/) or [Raspberry Pi Imager](https://www.raspberrypi.com/software/) and boot it: a one-shot first-boot service grows the rootfs to fill the destination card and regenerates SSH host keys, leaving you with an equivalent device. When `/srv/prepperpi/` lives on a separate volume (M.2 / SSD), the system image stays small and content is saved as a companion `.tar` next to the image. See [`docs/backup-and-recovery.md`](docs/backup-and-recovery.md).
 
 **Not yet shipped (planned):**
 
 - Optional offline place-name search and routing
-- Config export, backup to USB
+- Config export / import
 - Signed release images, auto-generated release notes
 
 Star the repo if you want to be notified as each phase lands, or dive into the [roadmap](#roadmap) if you'd like to help build it.
@@ -203,7 +204,7 @@ how to author your own without forking.
 
 **Phase 3 — Admin console and updates.** ✅ **Shipped.** Network settings ✅, Ethernet online mode ✅, Storage and health ✅, Offline maps panel ✅, **one-click content bundles ✅**, **update notifier ✅**.
 
-**Phase 4 — Polish and release.** Backup and restore, signed release images, auto-generated release notes, documentation, community channels.
+**Phase 4 — Polish and release.** ⏳ **In progress.** Disaster-recovery image backup ✅. Still ahead: config export/import, signed release images, auto-generated release notes, documentation, community channels.
 
 Possible futures (not committed): non-Pi SBC support, an optional offline LLM assistant over your library, mesh between multiple PrepperPis, APRS and Winlink ham-radio integrations.
 

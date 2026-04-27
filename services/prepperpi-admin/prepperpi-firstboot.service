@@ -1,0 +1,21 @@
+[Unit]
+Description=PrepperPi first-boot tasks (resize rootfs, regen SSH host keys)
+# Only fires when /etc/machine-id was empty at boot — i.e. on a freshly
+# flashed clone produced by backup-image.sh, never on a normally-booting
+# appliance whose previous boot completed.
+ConditionFirstBoot=yes
+
+# Need the rootfs writable, but run before sshd tries to start since
+# missing host keys would make sshd refuse.
+After=local-fs.target
+Before=ssh.service ssh.socket sshd.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/prepperpi/services/prepperpi-admin/prepperpi-firstboot.sh
+RemainAfterExit=no
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

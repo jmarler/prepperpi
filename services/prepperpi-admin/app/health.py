@@ -273,6 +273,12 @@ def usb_drives() -> list[dict]:
         if not child.is_dir():
             continue
         mount = str(child)
+        # Skip stale mountpoint dirs left behind after an unplug — the
+        # presence of the dir alone isn't proof of an attached drive.
+        # `rw_state` is keyed on what /proc/1/mounts reports as actually
+        # mounted under USB_BASE, so absence here means "not mounted".
+        if mount not in rw_state:
+            continue
         try:
             stats = os.statvfs(mount)
         except OSError:
