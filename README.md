@@ -72,14 +72,17 @@ Content lives at `/srv/prepperpi`, ideally on an external SSD or NVMe so the SD 
 
 PrepperPi targets the Raspberry Pi 4B and Pi 5. Older Pis aren't supported in v1 (the AP-grade radio and 64-bit-only assumption rule them out).
 
-Rough USD prices, retail, mid-2026 — these fluctuate; check current pricing.
+Rough USD ranges from US retailers (Adafruit, Pimoroni) as of 2026-04. DRAM costs have been volatile and stock is spotty for several SKUs — check current prices and availability before ordering.
 
 | Board | RAM | Price | Good for | Notes |
 |---|---|---|---|---|
-| Raspberry Pi 4B | 4 GB | ~$45 | Solo or small-household | Default build skips optional routing/geocoding modules. |
-| Raspberry Pi 4B | 8 GB | ~$75 | Most households | Sweet spot for cost and headroom. |
-| Raspberry Pi 5 | 4 GB | ~$60 | Field / NGO use | Active cooling recommended. NVMe HAT unlocks fast content storage. |
-| Raspberry Pi 5 | 8 GB+ | ~$80 | Heavier deployments | Headroom for the future LLM module. |
+| Raspberry Pi 5 | 4 GB | ~$115–135 | Solo or small-household | Active cooling recommended. NVMe HAT unlocks fast content storage. |
+| Raspberry Pi 5 | 8 GB | ~$185–205 | Most households | Best balance of cost and headroom for new buyers. |
+| Raspberry Pi 5 | 16 GB | ~$300–340 *(stock spotty)* | Heavier deployments | Headroom for the future LLM module. |
+| Raspberry Pi 4B | 4 GB | ~$105–125 | If you already own one | Default build skips optional routing/geocoding modules. |
+| Raspberry Pi 4B | 8 GB | ~$175–195 | If you already own one | Same ballpark as Pi 5 8 GB now; pick the 5 if you're buying new. |
+
+**For new buyers**, the Pi 5 8 GB is the practical default — it's now within ~$10 of the Pi 4B 8 GB but ~3× faster. The Pi 4B is still fully supported; if you already have one, it works great. Skip the 1 GB and 2 GB tiers — they don't have enough RAM for the full stack under concurrent load.
 
 **Storage for content** — content gets large fast and you don't want to grind your SD card.
 
