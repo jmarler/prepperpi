@@ -8,11 +8,16 @@
 # =============
 # A full pass downloads roughly 100-150 GB and may peak at ~80 GB of
 # concurrent on-disk extracts. GitHub's standard ubuntu runners ship
-# with 14 GB of disk — not enough. Wire this against either:
+# with 14 GB of disk — not enough.
 #
-#   * a self-hosted runner with ≥250 GB disk + a fast pipe, or
-#   * an `ubuntu-latest-large` (paid / GHE) / `ubuntu-24.04-large` runner,
-#     which currently provisions ~150 GB disk
+# We run on a self-hosted Docker runner (`myoung34/github-runner`) on
+# the maintainer's NAS with the `nas-bigdisk` label. The runner sits
+# Idle between monthly cron firings and never sees PR-author code
+# (this workflow has no `pull_request` trigger).
+#
+# Alternative if the self-hosted runner is unavailable: flip
+# `runs-on:` back to `ubuntu-latest-large` (paid GHA) which provisions
+# ~150 GB disk.
 #
 # The helper script writes its measurements sidecar after every country,
 # so a runner that times out at 6h can be re-triggered and resume from
@@ -44,10 +49,7 @@ permissions:
 
 jobs:
   recalibrate:
-    # Adjust this label to match your runner pool. Standard GHA runners
-    # don't have enough disk; this job will fail at the first big-country
-    # extract.
-    runs-on: ubuntu-latest-large
+    runs-on: [self-hosted, linux, x64, nas-bigdisk]
     timeout-minutes: 240
 
     env:
