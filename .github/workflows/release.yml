@@ -186,6 +186,10 @@ jobs:
           STAGE_DIR: ${{ steps.stage.outputs.stage_dir }}
           TAG: ${{ steps.ref.outputs.tag }}
           PRERELEASE: ${{ steps.ref.outputs.prerelease }}
+          # Pass --repo to every gh call. STAGE_DIR is outside the
+          # checkout, so gh's auto-detection of the base repo from cwd
+          # would fail with "fatal: not a git repository".
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           version="${{ steps.ref.outputs.version }}"
@@ -199,8 +203,8 @@ jobs:
           # If the release already exists (manual rerun, or push trigger
           # firing twice), upload the new artifacts to it instead of
           # failing on "release already exists".
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" \
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$REPO" \
               "prepperpi-${version}.zip" \
               "prepperpi-${version}.zip.asc" \
               "prepperpi-${version}.rpi-imager.json" \
@@ -209,7 +213,7 @@ jobs:
               prepperpi-public.asc \
               --clobber
           else
-            gh release create "$TAG" \
+            gh release create "$TAG" --repo "$REPO" \
               --title "PrepperPi ${version}" \
               --generate-notes \
               "${flags[@]}" \
