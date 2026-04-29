@@ -90,30 +90,18 @@ install_files() {
   log "installing app + worker to ${DST_DIR}"
   install -d -m 0755 "$DST_DIR" "$APP_DST" "${APP_DST}/templates" "${APP_DST}/static"
 
-  install -m 0644 "${SRC_DIR}/app/main.py"        "${APP_DST}/main.py"
-  install -m 0644 "${SRC_DIR}/app/uplink.py"      "${APP_DST}/uplink.py"
-  install -m 0644 "${SRC_DIR}/app/health.py"      "${APP_DST}/health.py"
-  install -m 0644 "${SRC_DIR}/app/aria2.py"       "${APP_DST}/aria2.py"
-  install -m 0644 "${SRC_DIR}/app/catalog.py"     "${APP_DST}/catalog.py"
-  install -m 0644 "${SRC_DIR}/app/maps.py"        "${APP_DST}/maps.py"
-  install -m 0644 "${SRC_DIR}/app/bundles.py"     "${APP_DST}/bundles.py"
-  install -m 0644 "${SRC_DIR}/app/bundles_install.py" "${APP_DST}/bundles_install.py"
-  install -m 0644 "${SRC_DIR}/app/updates.py"     "${APP_DST}/updates.py"
-  install -m 0644 "${SRC_DIR}/app/updates_state.py" "${APP_DST}/updates_state.py"
-  install -m 0644 "${SRC_DIR}/app/updates_apply.py" "${APP_DST}/updates_apply.py"
-  install -m 0644 "${SRC_DIR}/app/installed_bundles.py" "${APP_DST}/installed_bundles.py"
-  install -m 0644 "${SRC_DIR}/app/config_io.py"   "${APP_DST}/config_io.py"
-  install -m 0644 "${SRC_DIR}/app/templates/base.html"    "${APP_DST}/templates/base.html"
-  install -m 0644 "${SRC_DIR}/app/templates/home.html"    "${APP_DST}/templates/home.html"
-  install -m 0644 "${SRC_DIR}/app/templates/network.html" "${APP_DST}/templates/network.html"
-  install -m 0644 "${SRC_DIR}/app/templates/storage.html" "${APP_DST}/templates/storage.html"
-  install -m 0644 "${SRC_DIR}/app/templates/catalog.html" "${APP_DST}/templates/catalog.html"
-  install -m 0644 "${SRC_DIR}/app/templates/maps.html"    "${APP_DST}/templates/maps.html"
-  install -m 0644 "${SRC_DIR}/app/templates/bundles.html" "${APP_DST}/templates/bundles.html"
-  install -m 0644 "${SRC_DIR}/app/templates/updates.html" "${APP_DST}/templates/updates.html"
-  install -m 0644 "${SRC_DIR}/app/templates/backup.html"  "${APP_DST}/templates/backup.html"
-  install -m 0644 "${SRC_DIR}/app/static/admin.css"       "${APP_DST}/static/admin.css"
-  install -m 0644 "${SRC_DIR}/app/static/admin.js"        "${APP_DST}/static/admin.js"
+  # Glob-install everything under app/ so adding a new module / template
+  # / static file doesn't require remembering to extend a per-file
+  # allowlist here. The previous explicit list drifted — version_info.py
+  # was added in PR #37 but missed the allowlist, so the v0.99.0-rc.1
+  # admin daemon crashed on import.
+  #
+  # __pycache__ is a directory, not matched by *.py, so pyc artifacts
+  # from a developer's local test runs don't leak into the install.
+  install -m 0644 "${SRC_DIR}/app/"*.py            "${APP_DST}/"
+  install -m 0644 "${SRC_DIR}/app/templates/"*.html "${APP_DST}/templates/"
+  install -m 0644 "${SRC_DIR}/app/static/"*.css    "${APP_DST}/static/"
+  install -m 0644 "${SRC_DIR}/app/static/"*.js     "${APP_DST}/static/"
 
   # The privileged workers. Owned root:root, mode 0755 so the admin
   # user can execute via sudo but not modify in place. sudo refuses
