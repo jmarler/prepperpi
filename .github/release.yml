@@ -1,0 +1,31 @@
+# Auto-generated release notes config. Consumed by
+# `gh release create --generate-notes` (and the GitHub UI's "Generate
+# release notes" button) to group merged PRs by label.
+#
+# Maintainer process: label every PR with one of feat/fix/docs/chore
+# (or both an alias like `bug` for fix). Anything unlabeled lands in
+# the catch-all "Other changes" section.
+
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+  categories:
+    - title: Features
+      labels:
+        - feat
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - fix
+        - bug
+    - title: Documentation
+      labels:
+        - docs
+    - title: Maintenance
+      labels:
+        - chore
+        - dependencies
+    - title: Other changes
+      labels:
+        - "*"

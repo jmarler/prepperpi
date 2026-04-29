@@ -43,6 +43,7 @@ import updates as updates_mod
 import updates_apply
 import updates_state
 from uplink import detect_uplink
+from version_info import read_image_version
 
 APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
@@ -414,7 +415,12 @@ def uplink_state() -> dict:
 def admin_home(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         "home.html",
-        {"request": request, "active": "home", "uplink": detect_uplink()},
+        {
+            "request": request,
+            "active": "home",
+            "uplink": detect_uplink(),
+            "image_version": read_image_version(),
+        },
     )
 
 

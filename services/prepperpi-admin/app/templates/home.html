@@ -36,4 +36,12 @@
 <p class="admin-footnote-info">Uplink: plug Ethernet to bring the Pi online for downloads. AP clients are not bridged to the internet (the Pi is not a hotspot).</p>
 
 <p class="admin-footnote">The admin console is reachable only from clients on the PrepperPi Wi-Fi network or from the device itself. It is never exposed to an upstream uplink.</p>
+
+{% if image_version and image_version.image_version %}
+<footer class="admin-version">
+	<span>PrepperPi {{ image_version.image_version }}</span>
+	{% if image_version.built_at %}<span> · built {{ image_version.built_at }}</span>{% endif %}
+	{% if image_version.git_commit and image_version.git_commit != "unknown" %}<span> · <code>{{ image_version.git_commit[:12] }}</code></span>{% endif %}
+</footer>
+{% endif %}
 {% endblock %}
