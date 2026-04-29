@@ -7,7 +7,7 @@
 Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, and more — no internet, no subscriptions, no tracking.
 
 [![License: MIT-0](https://img.shields.io/badge/license-MIT--0-blue)](LICENSE)
-[![Status: Beta](https://img.shields.io/badge/status-beta-blue)](#status)
+[![Status: Stable](https://img.shields.io/badge/status-stable-brightgreen)](#status)
 [![Platform: Raspberry Pi 4B / 5](https://img.shields.io/badge/platform-Raspberry%20Pi%204B%20%2F%205-c51a4a)](#hardware)
 
 </div>
@@ -16,7 +16,7 @@ Self-hosted Wi-Fi. Offline Wikipedia, maps, medical references, repair guides, a
 
 ## Status
 
-PrepperPi is **beta**. Every feature in the box has been used by the maintainer on real Pi 4B hardware. You should expect rough edges and report them. Release engineering — signed images on GitHub Releases via tag-triggered CI — is the last item between beta and 1.0.
+PrepperPi is **stable** as of v1.0.0. Every feature in the box has been used by the maintainer on real Pi 4B hardware, and the SD-card image on [Releases](https://github.com/jmarler/prepperpi/releases/latest) is GPG-signed and reproducible from the pinned pi-gen revision. Bug reports welcome.
 
 **What's in the box**
 
@@ -29,10 +29,9 @@ PrepperPi is **beta**. Every feature in the box has been used by the maintainer 
 
 **Not yet shipped**
 
-- Tag-triggered GitHub Releases with signed `.img.xz` artifacts (in progress).
 - Optional offline place-name search and turn-by-turn routing.
 
-Star the repo to be notified as 1.0 lands, or jump to the [roadmap](#roadmap).
+Star the repo to follow along, or jump to the [roadmap](#roadmap).
 
 ## What is PrepperPi?
 
@@ -173,11 +172,11 @@ The four official bundles are baked into the SD image so they're available offli
 
 **Phase 3 — Admin console and updates.** ✅ **Shipped.** Network ✅, online mode ✅, storage and health ✅, maps panel ✅, bundles ✅, update notifier ✅.
 
-**Phase 4 — Polish and release.** ⏳ **In progress.** Disaster-recovery image ✅, config export/import ✅. Still ahead: signed release pipeline, auto-generated release notes, community channels.
+**Phase 4 — Polish and release.** ✅ Disaster-recovery image, config export/import, signed release pipeline with auto-generated notes, all shipped.
 
 Possible futures (not committed): non-Pi SBC support, an optional offline LLM assistant over your library, mesh between multiple PrepperPis, APRS and Winlink ham-radio integrations.
 
-## Known limitations (beta)
+## Known limitations
 
 - **Samsung Galaxy devices** don't auto-open the captive portal. Workaround: type any URL in a browser after connecting.
 - **Pi 5 isn't yet end-to-end verified.** All testing has been on a Pi 4B 8 GB. Pi 5 support is in the code but a fresh flash-and-boot test on real Pi 5 hardware is pending.
