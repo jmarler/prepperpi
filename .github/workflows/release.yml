@@ -1,0 +1,228 @@
+# Tag-triggered release: builds the SD image, signs it, and publishes
+# a GitHub Release with auto-generated notes.
+#
+# Trigger:
+#   - push of a tag matching v*  (cuts a real release)
+#   - workflow_dispatch with `tag` input  (manual rerun against an
+#     existing tag — used during dry-runs and to retry a failed
+#     publish without re-tagging)
+#
+# Trust chain:
+#   The signing private key lives in the GPG_PRIVATE_KEY secret. It is
+#   imported into the runner at job start and removed when the job
+#   ends. Verifiers fetch the public key from
+#   release/prepperpi-public.asc in the repo (also uploaded as a
+#   release artifact).
+#
+# Output artifacts on each Release:
+#   prepperpi-<version>.zip               compressed SD image (pi-gen)
+#   prepperpi-<version>.zip.asc           detached GPG signature
+#   prepperpi-<version>.rpi-imager.json   sidecar manifest for Pi Imager
+#   SHA256SUMS                            one-line sha256 of the .zip
+#   SHA256SUMS.asc                        detached GPG signature
+#   prepperpi-public.asc                  public key (convenience)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build and republish"
+        required: true
+
+permissions:
+  contents: write  # needs to create the GitHub Release
+
+jobs:
+  release:
+    # Native ARM64 runner -- pi-gen runs without qemu emulation, ~15-25
+    # min vs 45-90 min on x86_64+qemu.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+
+    steps:
+      - name: Resolve target ref
+        id: ref
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          if [[ -z "$tag" ]]; then
+            echo "could not determine tag" >&2
+            exit 1
+          fi
+          # Strip the leading `v` for the artifact filename. `v1.2.3` ->
+          # `1.2.3`, `v0.99.0-rc.1` -> `0.99.0-rc.1`.
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # Tags ending in `-rc.<N>` or `-beta.<N>` are pre-releases.
+          if [[ "$tag" =~ -rc\.[0-9]+$ || "$tag" =~ -beta\.[0-9]+$ ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out PrepperPi at the tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ref.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            rsync xz-utils ca-certificates
+
+      - name: Build image
+        run: |
+          bash images/build.sh
+
+      - name: Stage release artifacts
+        id: stage
+        run: |
+          set -euo pipefail
+          version="${{ steps.ref.outputs.version }}"
+          stage_dir="${RUNNER_TEMP}/release"
+          mkdir -p "$stage_dir"
+
+          # pi-gen names its zip something like
+          # `<DATE>-prepperpi-prepperpi.zip` (date-of-build prefix +
+          # IMG_NAME + EXPORT_IMAGE's IMG_SUFFIX). We rename to
+          # `prepperpi-<version>.zip` so downloaders see a stable,
+          # version-named artifact regardless of the build date.
+          src_zip=$(find images/out -maxdepth 1 -name '*-prepperpi.zip' -type f | sort | tail -n1)
+          src_manifest=$(find images/out -maxdepth 1 -name '*.rpi-imager.json' -type f | sort | tail -n1)
+          if [[ -z "$src_zip" || -z "$src_manifest" ]]; then
+            echo "expected build artifacts missing under images/out" >&2
+            ls -la images/out/ >&2
+            exit 1
+          fi
+
+          dst_zip="${stage_dir}/prepperpi-${version}.zip"
+          dst_manifest="${stage_dir}/prepperpi-${version}.rpi-imager.json"
+          cp "$src_zip" "$dst_zip"
+          cp "$src_manifest" "$dst_manifest"
+
+          # The rpi-imager.json sidecar references the .zip by absolute
+          # path on the build host. Rewrite the URL to a stable relative
+          # filename so the downloaded sidecar resolves against whatever
+          # directory the user dropped both files into.
+          jq --arg url "prepperpi-${version}.zip" \
+             '.os_list[].url = $url' \
+             "$dst_manifest" > "${dst_manifest}.tmp"
+          mv "${dst_manifest}.tmp" "$dst_manifest"
+
+          # SHA256SUMS — only the .zip is checksummed. The sidecar JSON
+          # already carries its own sha256 fields, and the .asc files
+          # are signatures (verified differently).
+          (cd "$stage_dir" && sha256sum "prepperpi-${version}.zip" > SHA256SUMS)
+
+          # Copy the public key so it ships next to the artifacts. The
+          # source-of-truth lives in the repo; this is convenience.
+          cp release/prepperpi-public.asc "${stage_dir}/prepperpi-public.asc"
+
+          ls -lh "$stage_dir"
+          echo "stage_dir=${stage_dir}" >> "$GITHUB_OUTPUT"
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GPG_PRIVATE_KEY:-}" ]]; then
+            echo "GPG_PRIVATE_KEY secret is empty -- cannot sign release" >&2
+            exit 1
+          fi
+          # `--batch --pinentry-mode=loopback` so gpg never tries to
+          # prompt for a passphrase (the key has none, as ratified for
+          # this project's threat model).
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          echo 'pinentry-mode loopback' > ~/.gnupg/gpg.conf
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # Capture the long key id of the just-imported key for signing.
+          keyid=$(gpg --list-secret-keys --keyid-format=long --with-colons \
+                  | awk -F: '$1=="sec"{print $5; exit}')
+          if [[ -z "$keyid" ]]; then
+            echo "could not determine signing key id after import" >&2
+            exit 1
+          fi
+          echo "GPG_KEY_ID=$keyid" >> "$GITHUB_ENV"
+
+      - name: Sign artifacts
+        env:
+          STAGE_DIR: ${{ steps.stage.outputs.stage_dir }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.ref.outputs.version }}"
+          cd "$STAGE_DIR"
+          for target in "prepperpi-${version}.zip" "SHA256SUMS"; do
+            gpg --batch --yes --pinentry-mode=loopback \
+                --local-user "$GPG_KEY_ID" \
+                --armor --detach-sign \
+                --output "${target}.asc" \
+                "$target"
+          done
+          # Sanity: verify each signature against itself before publishing.
+          for sig in *.asc; do
+            # prepperpi-public.asc is the public key, not a signature.
+            [[ "$sig" == "prepperpi-public.asc" ]] && continue
+            gpg --verify "$sig" "${sig%.asc}"
+          done
+          ls -lh
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGE_DIR: ${{ steps.stage.outputs.stage_dir }}
+          TAG: ${{ steps.ref.outputs.tag }}
+          PRERELEASE: ${{ steps.ref.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          version="${{ steps.ref.outputs.version }}"
+          cd "$STAGE_DIR"
+
+          flags=()
+          if [[ "$PRERELEASE" == "true" ]]; then
+            flags+=(--prerelease)
+          fi
+
+          # If the release already exists (manual rerun, or push trigger
+          # firing twice), upload the new artifacts to it instead of
+          # failing on "release already exists".
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "prepperpi-${version}.zip" \
+              "prepperpi-${version}.zip.asc" \
+              "prepperpi-${version}.rpi-imager.json" \
+              SHA256SUMS \
+              SHA256SUMS.asc \
+              prepperpi-public.asc \
+              --clobber
+          else
+            gh release create "$TAG" \
+              --title "PrepperPi ${version}" \
+              --generate-notes \
+              "${flags[@]}" \
+              "prepperpi-${version}.zip" \
+              "prepperpi-${version}.zip.asc" \
+              "prepperpi-${version}.rpi-imager.json" \
+              SHA256SUMS \
+              SHA256SUMS.asc \
+              prepperpi-public.asc
+          fi
+
+      - name: Wipe imported key from runner
+        if: always()
+        run: |
+          # GitHub-hosted runners are ephemeral, but be explicit.
+          rm -rf ~/.gnupg || true

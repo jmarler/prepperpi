@@ -102,9 +102,11 @@ Rough USD ranges from US retailers (Adafruit, Pimoroni) as of 2026-04. DRAM cost
 
 ### Path A — flash a prebuilt image (non-technical)
 
-> 1.0 release with signed `.img.xz` artifacts is in progress. Until that ships, see Path B or build the image yourself with `images/build.sh` (Docker required, ~5 min on an ARM64 host).
+Download from [Releases](https://github.com/jmarler/prepperpi/releases/latest), [verify the signature](docs/release-engineering.md#verifying-a-downloaded-image), flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/), boot, and join `PrepperPi-XXXX`.
 
-Once 1.0 ships, this becomes: download from [Releases](https://github.com/jmarler/prepperpi/releases/latest) → flash with [Raspberry Pi Imager](https://www.raspberrypi.com/software/) → boot → join `PrepperPi-XXXX`.
+The verify step is one optional `gpg --verify` + `sha256sum -c` against the artifacts on the release page. Skip it if you trust your download path; do it if you don't.
+
+> Until 1.0 cuts, releases are tagged `v0.99.0-rc.<N>` and marked **prerelease**. They install identically.
 
 ### Path B — install on existing Raspberry Pi OS Lite (maker, works today)
 

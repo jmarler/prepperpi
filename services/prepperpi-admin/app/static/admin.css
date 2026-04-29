@@ -234,6 +234,21 @@ html { overflow-x: hidden; }
 	margin-top: 1rem;
 }
 
+.admin-version {
+	margin-top: 2rem;
+	padding-top: 0.75rem;
+	border-top: 1px solid var(--border);
+	color: var(--ink-dim);
+	font-size: 0.8rem;
+}
+
+.admin-version code {
+	background: var(--panel);
+	padding: 0.05rem 0.3rem;
+	border-radius: 3px;
+	font-size: 0.95em;
+}
+
 /* Flash banners */
 .flash {
 	margin: 1rem 0;

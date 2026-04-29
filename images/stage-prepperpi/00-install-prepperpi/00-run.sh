@@ -24,6 +24,7 @@ install -d -m 0755 "${ROOTFS_DIR}/etc/prepperpi"
 {
 	printf 'image_version=%s\n' "${PREPPERPI_VERSION:-unknown}"
 	printf 'git_commit=%s\n'    "${PREPPERPI_COMMIT:-unknown}"
+	printf 'pigen_rev=%s\n'     "${PREPPERPI_PIGEN_REV:-unknown}"
 	printf 'built_at=%s\n'      "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "${ROOTFS_DIR}/etc/prepperpi/image.version"
 chmod 0644 "${ROOTFS_DIR}/etc/prepperpi/image.version"
