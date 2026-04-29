@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "planet_source_url": "https://build.protomaps.com/20260425.pmtiles",
-  "started_at": "2026-04-26T02:06:31+00:00",
-  "completed_at": "2026-04-26T02:06:33+00:00",
+  "planet_source_url": "https://build.protomaps.com/20260428.pmtiles",
+  "started_at": "2026-04-29T04:09:18+00:00",
+  "completed_at": "2026-04-29T04:09:24+00:00",
   "by_region_id": {
     "CY": {
       "extracted_bytes": 54000000,
@@ -420,8 +420,8 @@
     "IS": {
       "extracted_bytes": 267000000,
       "transferred_bytes": 278000000,
-      "duration_seconds": 11.4,
-      "extracted_at": "2026-04-26T01:55:39+00:00",
+      "duration_seconds": 5.6,
+      "extracted_at": "2026-04-29T04:09:24+00:00",
       "attempts": 1
     },
     "FR": {
