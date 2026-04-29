@@ -27,11 +27,12 @@ PrepperPi is **stable** as of v1.0.0. Every feature in the box has been used by 
 - **USB content hosting** — auto-mount, in-browser file viewer with PDF / image / video / audio playback, ZIMs on USB auto-import into the library while plugged in.
 - **Backup and recovery** — flashable disaster-recovery image to USB, plus a small config-export `.tar.gz` for moving settings to a replacement Pi without lugging content.
 
-**Not yet shipped**
+**Possible additions, no commitments**
 
 - Optional offline place-name search and turn-by-turn routing.
+- Open ideas being tossed around: an offline LLM assistant over your library, mesh networking between PrepperPis, APRS / Winlink ham-radio integrations, non-Pi SBC support.
 
-Star the repo to follow along, or jump to the [roadmap](#roadmap).
+Star the repo if you want to follow along.
 
 ## What is PrepperPi?
 
@@ -105,8 +106,6 @@ Download from [Releases](https://github.com/jmarler/prepperpi/releases/latest), 
 
 The verify step is one optional `gpg --verify` + `sha256sum -c` against the artifacts on the release page. Skip it if you trust your download path; do it if you don't.
 
-> Until 1.0 cuts, releases are tagged `v0.99.0-rc.<N>` and marked **prerelease**. They install identically.
-
 ### Path B — install on existing Raspberry Pi OS Lite (maker, works today)
 
 Start with a fresh **Raspberry Pi OS Lite (64-bit, Bookworm or Trixie)** install on a Pi 4B or Pi 5, then:
@@ -164,25 +163,12 @@ One-click curated sets installable from the admin console's Bundles page:
 
 The four official bundles are baked into the SD image so they're available offline; when online, the admin console refreshes from [`prepperpi-bundles`](https://github.com/jmarler/prepperpi-bundles) for the latest. Anyone can host their own bundle source — see [`docs/creating-bundles.md`](docs/creating-bundles.md).
 
-## Roadmap
-
-**Phase 1 — Bootable base appliance.** ✅ **Shipped.** Installer + prebuilt SD image, Wi-Fi AP, captive portal landing page.
-
-**Phase 2 — Content and maps.** ⏳ **Mostly shipped.** Kiwix ✅, USB hosting ✅, live dashboard ✅, ZIM catalog ✅, offline tile server ✅, region downloader ✅. Still ahead: optional offline place-name search and routing.
-
-**Phase 3 — Admin console and updates.** ✅ **Shipped.** Network ✅, online mode ✅, storage and health ✅, maps panel ✅, bundles ✅, update notifier ✅.
-
-**Phase 4 — Polish and release.** ✅ Disaster-recovery image, config export/import, signed release pipeline with auto-generated notes, all shipped.
-
-Possible futures (not committed): non-Pi SBC support, an optional offline LLM assistant over your library, mesh between multiple PrepperPis, APRS and Winlink ham-radio integrations.
-
 ## Known limitations
 
 - **Samsung Galaxy devices** don't auto-open the captive portal. Workaround: type any URL in a browser after connecting.
 - **Pi 5 isn't yet end-to-end verified.** All testing has been on a Pi 4B 8 GB. Pi 5 support is in the code but a fresh flash-and-boot test on real Pi 5 hardware is pending.
 - **Maps downloader is one-shot, not resumable.** Most countries are 50–500 MB; the giant ones (US ≈ 1.5 GB, Russia ≈ 1.2 GB) hurt to interrupt.
 - **Online mode is Ethernet-only.** No Wi-Fi role-swap on the onboard radio (would drop the AP). USB Wi-Fi dongle as a client *and* keep the AP up is a stretch story, not shipped.
-- **No GitHub Release artifacts yet.** Build images locally or use the installer path until tag-triggered releases ship.
 
 More detail in [`docs/`](docs/).
 
