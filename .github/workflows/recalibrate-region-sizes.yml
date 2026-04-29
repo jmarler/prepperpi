@@ -42,6 +42,11 @@ on:
         description: "Parallel pmtiles extracts"
         required: false
         default: "6"
+      refresh:
+        description: "Re-measure countries even if they already have a measurement (passes --refresh to the script)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -78,12 +83,20 @@ jobs:
         env:
           COUNTRIES: ${{ inputs.countries }}
           CONC: ${{ inputs.concurrency || '6' }}
+          REFRESH: ${{ inputs.refresh }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/pmtiles-recalibrate-extracts
           extra=()
           if [[ -n "$COUNTRIES" ]]; then
             extra+=(--countries "$COUNTRIES")
+          fi
+          # `inputs.refresh` is "true"/"false" string for type:boolean
+          # workflow_dispatch inputs; cron-triggered runs leave REFRESH
+          # empty, which means "use script defaults" (i.e. skip already-
+          # measured countries).
+          if [[ "$REFRESH" == "true" ]]; then
+            extra+=(--refresh)
           fi
           # Allow a non-zero exit code when individual country extracts fail —
           # we still want to ship the partial improvements via a PR. The
