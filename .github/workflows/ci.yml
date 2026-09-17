@@ -101,3 +101,75 @@ jobs:
                   print(f"  ok  {p}")
           sys.exit(1 if fail else 0)
           PY
+
+      - name: Validate issue-form templates
+        # A malformed issue form doesn't error anywhere visible -- GitHub
+        # silently falls back to a blank issue, so a typo here is only
+        # noticed when a reporter's form is missing. Checks the handful of
+        # schema rules that actually bite, including `render` + required,
+        # which GitHub rejects outright.
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          import yaml
+
+          TEMPLATE_DIR = Path(".github/ISSUE_TEMPLATE")
+          VALID_TYPES = {"markdown", "input", "textarea", "dropdown", "checkboxes"}
+          fail = False
+
+          bad_files = set()
+
+          def err(path, msg):
+              global fail
+              print(f"::error file={path}::{msg}")
+              fail = True
+              bad_files.add(path)
+
+          for p in sorted(TEMPLATE_DIR.glob("*.yml")):
+              try:
+                  doc = yaml.safe_load(p.read_text())
+              except yaml.YAMLError as exc:
+                  err(p, f"not valid YAML: {exc}")
+                  continue
+
+              if p.name == "config.yml":
+                  for link in doc.get("contact_links") or []:
+                      missing = [k for k in ("name", "url", "about") if not link.get(k)]
+                      if missing:
+                          err(p, f"contact_link missing {missing}")
+                  print(f"  {'FAIL' if p in bad_files else 'ok  '}  {p}")
+                  continue
+
+              for key in ("name", "description", "body"):
+                  if key not in doc:
+                      err(p, f"missing top-level '{key}'")
+              seen = set()
+              for i, item in enumerate(doc.get("body") or []):
+                  kind = item.get("type")
+                  attrs = item.get("attributes") or {}
+                  if kind not in VALID_TYPES:
+                      err(p, f"body[{i}]: unknown type {kind!r}")
+                      continue
+                  if kind == "markdown":
+                      if not attrs.get("value"):
+                          err(p, f"body[{i}]: markdown block needs a value")
+                      continue
+                  if not attrs.get("label"):
+                      err(p, f"body[{i}]: needs a label")
+                  ident = item.get("id")
+                  if not ident:
+                      err(p, f"body[{i}]: needs an id")
+                  elif ident in seen:
+                      err(p, f"body[{i}]: duplicate id {ident!r}")
+                  else:
+                      seen.add(ident)
+                  if kind in ("dropdown", "checkboxes") and not attrs.get("options"):
+                      err(p, f"{ident}: {kind} needs options")
+                  # GitHub rejects a rendered textarea that is also required.
+                  if attrs.get("render") and (item.get("validations") or {}).get("required"):
+                      err(p, f"{ident}: `render` cannot be combined with required")
+              print(f"  {'FAIL' if p in bad_files else 'ok  '}  {p}")
+
+          sys.exit(1 if fail else 0)
+          PY
