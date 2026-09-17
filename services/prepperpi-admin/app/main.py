@@ -24,7 +24,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
@@ -39,6 +39,7 @@ import config_io
 import health
 import installed_bundles
 import maps
+import power
 import updates as updates_mod
 import updates_apply
 import updates_state
@@ -52,6 +53,7 @@ CONF_FILE = Path("/boot/firmware/prepperpi.conf")
 APPLY_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-network-config"
 STORAGE_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-storage-action"
 BACKUP_CMD = "/opt/prepperpi/services/prepperpi-admin/manage-backup"
+POWER_CMD = "/opt/prepperpi/services/prepperpi-admin/apply-power-action"
 EVENTS_FILE = Path("/opt/prepperpi/web/landing/_events.json")
 USB_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,255}$")
 
@@ -533,6 +535,87 @@ def storage_usb_toggle(name: str, writable: bool = Form(...)):
     return RedirectResponse("/admin/storage", status_code=303)
 
 
+@app.get("/admin/power", response_class=HTMLResponse)
+def power_get(
+    request: Request,
+    saved: Optional[str] = None,
+    error: Optional[str] = None,
+) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "power.html",
+        {
+            "request": request,
+            "active": "power",
+            "button": power.read_button_state(),
+            "gpio_choices": power.gpio_choices(),
+            "header_pin": power.header_pin,
+            "saved": saved,
+            "error": error,
+        },
+    )
+
+
+def _halt(action: str) -> RedirectResponse:
+    ok, msg = call_wrapper({"action": action}, cmd=POWER_CMD, timeout=30)
+    if not ok:
+        return RedirectResponse(
+            f"/admin/power?error={quote(msg[:200])}", status_code=303
+        )
+    return RedirectResponse(f"/admin/power/{action}ing", status_code=303)
+
+
+# Separate routes rather than one endpoint taking the verb as a form
+# field: a mangled or tampered field must not be able to turn "reboot"
+# into "power off the thing keeping the lights on."
+@app.post("/admin/power/poweroff")
+def power_poweroff() -> RedirectResponse:
+    return _halt("poweroff")
+
+
+@app.post("/admin/power/reboot")
+def power_reboot() -> RedirectResponse:
+    return _halt("reboot")
+
+
+@app.get("/admin/power/poweroffing", response_class=HTMLResponse)
+def power_poweroff_pending(request: Request) -> HTMLResponse:
+    """Terminal page. Rendered while the deferred halt is still counting
+    down, so it has to carry every instruction the operator needs — in a
+    few seconds there will be nothing left to serve it."""
+    return templates.TemplateResponse(
+        "power_pending.html",
+        {"request": request, "active": "power", "action": "poweroff"},
+    )
+
+
+@app.get("/admin/power/rebooting", response_class=HTMLResponse)
+def power_reboot_pending(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        "power_pending.html",
+        {"request": request, "active": "power", "action": "reboot"},
+    )
+
+
+@app.post("/admin/power/button")
+def power_button_set(
+    enabled: str = Form("off"),
+    gpio: int = Form(power.DEFAULT_GPIO),
+) -> RedirectResponse:
+    is_enabled = enabled == "on"
+    if is_enabled and gpio not in power.ALLOWED_GPIOS:
+        return RedirectResponse(
+            "/admin/power?error=" + quote("That GPIO pin isn't selectable."),
+            status_code=303,
+        )
+    payload = {"action": "set-button", "enabled": is_enabled, "gpio": gpio}
+    ok, msg = call_wrapper(payload, cmd=POWER_CMD, timeout=30)
+    if not ok:
+        return RedirectResponse(
+            f"/admin/power?error={quote(msg[:200])}", status_code=303
+        )
+    return RedirectResponse("/admin/power?saved=button", status_code=303)
+
+
 @app.get("/admin/diagnostics")
 def diagnostics_tarball():
     """Produce a downloadable diagnostics tarball.
@@ -650,7 +733,6 @@ def catalog_refresh():
         return RedirectResponse(f"/admin/catalog?refreshed=1", status_code=303)
     # Bounce back with the error in the query string so the user sees
     # a flash banner instead of a raw 5xx.
-    from urllib.parse import quote
     return RedirectResponse(
         f"/admin/catalog?refresh_error={quote(msg)}",
         status_code=303,

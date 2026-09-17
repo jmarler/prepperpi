@@ -1212,3 +1212,79 @@ html { overflow-x: hidden; }
 	color: var(--ink-dim);
 	margin-left: 0.25rem;
 }
+
+/* ---------- Power page ---------- */
+.power-section {
+	margin: 1.5rem 0;
+}
+
+.power-section__title {
+	margin: 0 0 0.5rem;
+	color: var(--accent);
+	font-size: 1.05rem;
+}
+
+.power-section__hint {
+	color: var(--ink-dim);
+	font-size: 0.85rem;
+	margin: 0.25rem 0 0.75rem;
+}
+
+.power-section__state {
+	font-size: 0.9rem;
+	margin: 0.75rem 0 0;
+}
+
+/* Side-by-side on a laptop, stacked on a phone — the phone is the
+   likely client here, since "I need to turn this off" usually happens
+   with nothing but a handset nearby. */
+.power-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+}
+
+.power-actions form {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	min-width: 12rem;
+}
+
+.power-actions__hint {
+	color: var(--ink-dim);
+	font-size: 0.8rem;
+}
+
+/* The checkbox row is the one field that reads left-to-right rather
+   than stacked. */
+.admin-form__field--check {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.power-pending {
+	background: var(--panel-dim);
+	border: 1px solid var(--accent);
+	border-radius: var(--radius);
+	padding: 1rem 1.25rem;
+	margin-top: 1rem;
+}
+
+.power-pending__lead {
+	font-size: 1.05rem;
+	margin: 0 0 0.75rem;
+}
+
+.power-pending__steps {
+	margin: 0 0 1rem;
+	padding-left: 1.3rem;
+	line-height: 1.6;
+}
+
+.power-pending__note {
+	color: var(--ink-dim);
+	font-size: 0.9rem;
+	margin: 0.5rem 0 0;
+}

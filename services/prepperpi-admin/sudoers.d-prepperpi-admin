@@ -1,8 +1,7 @@
 # /etc/sudoers.d/prepperpi-admin
-# PrepperPi — let the unprivileged prepperpi-admin user run exactly
-# one privileged action: the apply-network-config worker, which
-# validates its JSON-stdin payload, writes /boot/firmware/prepperpi.conf,
-# and bounces the AP stack.
+# PrepperPi — let the unprivileged prepperpi-admin user run a small,
+# fixed set of privileged workers. Each validates its own JSON-stdin
+# payload independently of the FastAPI process that invoked it.
 #
 # - NOPASSWD because the FastAPI app cannot prompt; it invokes via
 #   `sudo -n`.
@@ -14,3 +13,4 @@
 prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/apply-network-config
 prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/apply-storage-action
 prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/manage-backup
+prepperpi-admin ALL=(root) NOPASSWD: /opt/prepperpi/services/prepperpi-admin/apply-power-action

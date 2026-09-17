@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Power · Admin · PrepperPi{% endblock %}
+{% block content %}
+<h2 class="admin-page__title">Power</h2>
+
+{% if saved == "button" %}
+<div class="flash flash--success" role="status">
+	<strong>Saved.</strong> The power-button setting takes effect the next time the Pi boots.
+</div>
+{% endif %}
+
+{% if error %}
+<div class="flash flash--error" role="alert">
+	<strong>Couldn't do that:</strong> {{ error }}
+</div>
+{% endif %}
+
+<section class="power-section" aria-labelledby="power-shutdown-title">
+	<h3 id="power-shutdown-title" class="power-section__title">Shut down or restart</h3>
+	<p class="power-section__hint">
+		Always shut down this way before unplugging the Pi. Pulling the power
+		while it's running can corrupt the SD card — most often mid-download,
+		when a content file is being written.
+	</p>
+
+	<div class="power-actions">
+		<form method="post" action="/admin/power/poweroff"
+		      data-confirm="Shut down PrepperPi? Everything on this network will lose access until you power it back on by hand.">
+			<button type="submit" class="btn btn--danger">Shut down</button>
+			<small class="power-actions__hint">Halts cleanly, then it's safe to unplug.</small>
+		</form>
+
+		<form method="post" action="/admin/power/reboot"
+		      data-confirm="Restart PrepperPi? The Wi-Fi network will drop for about a minute.">
+			<button type="submit" class="btn">Restart</button>
+			<small class="power-actions__hint">Comes back on its own in about a minute.</small>
+		</form>
+	</div>
+</section>
+
+<section class="power-section" aria-labelledby="power-button-title">
+	<h3 id="power-button-title" class="power-section__title">Physical power button</h3>
+	<p class="power-section__hint">
+		Wire a momentary push-button across two pins on the Pi's 40-pin header
+		and a short press shuts the Pi down cleanly — no phone, no browser.
+		This is handled by the Pi's own firmware and Linux, not by PrepperPi,
+		so the button still works even if PrepperPi's services have stopped.
+	</p>
+
+	{% if not button.available %}
+	<div class="flash flash--error" role="alert">
+		Couldn't find <code>config.txt</code> on the boot partition, so the
+		button can't be configured from here. This is expected if you're not
+		running on a Raspberry Pi.
+	</div>
+	{% else %}
+	<form method="post" action="/admin/power/button" class="admin-form">
+		<label class="admin-form__field admin-form__field--check">
+			<input type="checkbox" name="enabled" value="on"
+			       {% if button.enabled %}checked{% endif %}>
+			<span class="admin-form__label">Enable the physical power button</span>
+		</label>
+
+		<label class="admin-form__field">
+			<span class="admin-form__label">Button pin</span>
+			<select class="admin-form__input" name="gpio">
+				{% for c in gpio_choices %}
+				<option value="{{ c.gpio }}" {% if button.gpio == c.gpio %}selected{% endif %}>{{ c.label }}</option>
+				{% endfor %}
+			</select>
+			<small class="admin-form__hint">
+				Wire the button between this pin and any <strong>ground</strong> pin
+				(header pins 6, 9, 14, 20, 25, 30, 34, or 39). Press for about a
+				second to shut down.
+			</small>
+		</label>
+
+		<div class="warning-banner" role="note">
+			<strong>Two things worth knowing:</strong>
+			<ul>
+				<li><strong>GPIO3 (header pin 5) also turns the Pi back on.</strong>
+					Pressing the same button while the Pi is halted boots it again,
+					so one button does both. The other pins only shut down.</li>
+				<li><strong>GPIO3 is shared with I²C.</strong> If you've added a
+					real-time clock or any other I²C board on header pins 3 and 5,
+					pick a different pin here — otherwise normal I²C traffic will
+					look like button presses and shut the Pi down at random.</li>
+			</ul>
+		</div>
+
+		<button type="submit" class="btn btn--primary">Save button setting</button>
+		<small class="admin-form__hint">Takes effect after the next restart.</small>
+	</form>
+
+	{% if button.enabled %}
+	<p class="power-section__state" role="status">
+		Currently configured: <strong>GPIO{{ button.gpio }}</strong>
+		{% set pin = header_pin(button.gpio) %}
+		{% if pin %}(header pin {{ pin }}){% endif %}
+		— wire the button between that pin and a ground pin.
+	</p>
+	{% endif %}
+	{% endif %}
+</section>
+{% endblock %}
