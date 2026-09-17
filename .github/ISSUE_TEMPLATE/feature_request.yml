@@ -1,0 +1,72 @@
+name: Feature request
+description: A specific change you'd like to see, concrete enough to act on.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a specific, concrete change. If the idea is still taking shape, or
+        you want to talk it through first,
+        [Ideas](https://github.com/jmarler/prepperpi/discussions/categories/ideas)
+        is the better room — plenty of features started there.
+
+        Worth knowing before you write: PrepperPi is maintained by one person in
+        his spare time, and it's deliberately a small appliance rather than a
+        platform. A good request may still get declined on scope. If it does,
+        the code is MIT-0 — fork it and build the thing.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem?
+      description: |
+        What are you trying to do that's hard or impossible today? Describe the
+        situation rather than the solution — it often turns out there's a
+        simpler fix than the one either of us first thought of.
+      placeholder: |
+        I keep the Pi in a sealed case on a boat. To shut it down I have to
+        open the case, which means I usually just pull the power instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+      description: Your suggested change, as concretely as you can put it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried instead?
+      description: |
+        Workarounds you're using today, or other approaches you considered and
+        rejected. Helps rule out solutions that don't need a code change.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: offer
+    attributes:
+      label: Would you want to build it?
+      description: |
+        Entirely optional and not expected — "no" is a perfectly good answer
+        and won't count against the request.
+      options:
+        - "No, just suggesting it"
+        - "Maybe, with some pointers on where to start"
+        - "Yes, I'd like to open a pull request"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you post
+      options:
+        - label: I checked the [open issues](https://github.com/jmarler/prepperpi/issues) and [Ideas](https://github.com/jmarler/prepperpi/discussions/categories/ideas) for the same suggestion.
+          required: false
+        - label: This works offline, or degrades gracefully without internet. (PrepperPi's whole point is that it works with no uplink.)
+          required: false

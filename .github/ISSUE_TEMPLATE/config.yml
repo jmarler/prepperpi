@@ -1,0 +1,14 @@
+# Questions and open-ended ideas go to Discussions, not Issues. Blank
+# issues stay enabled so a genuine report that fits neither template
+# isn't blocked by the forms.
+blank_issues_enabled: true
+contact_links:
+  - name: Question — how do I do X?
+    url: https://github.com/jmarler/prepperpi/discussions/categories/q-a
+    about: Anything starting "how do I" or "why does it". Ask in Q&A; you'll usually get a faster answer than an issue.
+  - name: Idea or suggestion
+    url: https://github.com/jmarler/prepperpi/discussions/categories/ideas
+    about: Half-formed ideas, content suggestions, "has anyone tried". Open an issue instead if you have a specific, concrete change in mind.
+  - name: Show off your build
+    url: https://github.com/jmarler/prepperpi/discussions/categories/show-and-tell
+    about: Cases, batteries, solar, wiring, what content you loaded. Photos very welcome.

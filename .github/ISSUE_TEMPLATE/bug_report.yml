@@ -1,0 +1,129 @@
+name: Bug report
+description: Something works differently than it should, and you can point at it.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The two command outputs below answer most of
+        the questions I'd otherwise have to ask, so filling them in usually saves
+        a round trip.
+
+        If you're not sure it's a bug — if it starts with "how do I" — ask in
+        [Q&A](https://github.com/jmarler/prepperpi/discussions/categories/q-a)
+        instead. No wrong door; I'll move it if it belongs elsewhere.
+
+  # No `render:` here on purpose -- GitHub refuses to mark a rendered
+  # textarea as required, and this is the one field worth requiring.
+  - type: textarea
+    id: version
+    attributes:
+      label: Version
+      description: |
+        Paste the output of `cat /etc/prepperpi/image.version`.
+
+        No terminal access? The admin console's Overview page shows the version
+        at the bottom. Failing that, say which release you flashed.
+      placeholder: |
+        image_version=v1.1.0
+        git_commit=b7b7859db37b0ecc823f9b448b7f9da56cba9415
+        pigen_rev=4ad56cc850fa60adcc7f07dc15879bc95cc1d281
+        built_at=2026-09-17T01:58:56Z
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_method
+    attributes:
+      label: How did you install it?
+      options:
+        - Flashed the prebuilt SD-card image from Releases
+        - Ran installer/install.sh on an existing Raspberry Pi OS Lite
+        - Updated in place over an older version
+        - Something else (describe below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Which Pi?
+      options:
+        - Raspberry Pi 4B
+        - Raspberry Pi 5
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead.
+      placeholder: |
+        I opened the admin console and clicked Shut down. The page went blank
+        and the Pi stayed on. I expected it to power off within a few seconds.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Can you make it happen again?
+      description: |
+        Rough steps are fine. "Happens every time" or "only happened once" is
+        useful on its own — a bug you can't reproduce is still worth reporting.
+      placeholder: |
+        1. Join the PrepperPi Wi-Fi from an iPhone
+        2. Open the admin console, go to Power
+        3. Tap Shut down and confirm
+        4. Happens every time
+    validations:
+      required: false
+
+  - type: textarea
+    id: failed_units
+    attributes:
+      label: Anything failed?
+      description: |
+        Paste the output of `systemctl --failed`.
+
+        If it says "0 loaded units listed", say so — that's useful too, because
+        it rules out a whole class of cause.
+      render: shell
+      placeholder: |
+        UNIT                     LOAD   ACTIVE SUB    DESCRIPTION
+        prepperpi-web.service    loaded failed failed PrepperPi — web front
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        If a specific part is misbehaving, its log usually says why. Pick
+        whichever fits, or paste them all:
+
+        ```
+        sudo journalctl -u prepperpi-admin -n 50 --no-pager
+        sudo journalctl -u prepperpi-web   -n 50 --no-pager
+        sudo journalctl -u prepperpi-ap-configure -n 50 --no-pager
+        ```
+
+        The admin console's Storage page has a **Download diagnostics tarball**
+        button that bundles all of this up for you. It deliberately leaves out
+        your Wi-Fi password, so it's safe to attach here.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you post
+      options:
+        - label: I checked the [open issues](https://github.com/jmarler/prepperpi/issues) and this isn't already reported.
+          required: false
+        - label: I've removed anything private from the text I'm pasting (Wi-Fi passwords, network names, anything identifying).
+          required: false
