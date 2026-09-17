@@ -135,6 +135,63 @@ Full walk-through (mount, copy, edit, eject) is in [`images/boot-partition/READM
 
 **The prebuilt image ships with default login `prepper` / `prepperpi`** for headless first-boot. **Change it before putting the device on any shared network.**
 
+## Shutting down
+
+Pulling the power on a running Pi can corrupt the SD card — most often mid-download, while a content file is being written. There are three clean ways to power down, and none of them needs a keyboard or a screen.
+
+### From any browser
+
+Open the admin console → **Power** → **Shut down**, and confirm.
+
+The page then tells you what to expect: the Pi takes about 20 seconds to halt. **Wait for the green activity LED to stop blinking and stay off**, then it's safe to unplug. The PrepperPi Wi-Fi network disappearing is the other sign it worked.
+
+Works from a phone joined to the PrepperPi Wi-Fi, or from a computer on the wired network the Pi is plugged into. The same page has a **Restart** button, which comes back on its own in two to three minutes.
+
+### From a physical button
+
+Wire a momentary push-button between two pins on the Pi's 40-pin header, then turn it on in the admin console. Good for a device in a case, on a shelf, or anywhere you won't have a phone in hand.
+
+**1. Wire the button.** Between **header pin 5 (GPIO3)** and **header pin 6 (ground)** — they're adjacent, which makes for a short, tidy run:
+
+```
+      3V3  (1) (2)  5V
+    GPIO2  (3) (4)  5V
+    GPIO3  (5) (6)  GND      <- button across these two
+    GPIO4  (7) (8)  GPIO14
+      GND  (9) (10) GPIO15
+```
+
+Any momentary normally-open button works; polarity doesn't matter. No resistor needed — the pin has an internal pull-up.
+
+**2. Enable it.** Admin console → **Power** → **Physical power button** → tick **Enable the physical power button**, leave the pin on **GPIO3**, and **Save**.
+
+**3. Reboot once.** The setting is read by the Pi's firmware at boot, so it takes effect on the next start — not immediately. Use the **Restart** button on the same page.
+
+After that, **press and hold the button for a second or two** and the Pi shuts down cleanly. The delay is deliberate: a one-second debounce means a knock or a brush against the case won't power your library off.
+
+Two things worth knowing about GPIO3 specifically:
+
+- **It also turns the Pi back on.** Press the same button while the Pi is halted and it boots. One button, both directions — which is why it's the default.
+- **It's shared with I²C.** If you've added a real-time clock or any other I²C board on header pins 3 and 5, choose a different pin from the dropdown. Otherwise normal I²C traffic looks like button presses and shuts the Pi down at random. The other pins shut down but can't wake the Pi.
+
+This path runs entirely on the Pi's own firmware and Linux's power handling — no PrepperPi service sits in the middle — so the button still works even if everything else has stopped responding.
+
+### From a shell
+
+```bash
+sudo systemctl poweroff
+```
+
+SSH is off by default in the prebuilt image, so this assumes you enabled it at flash time — see [`images/boot-partition/`](images/boot-partition/).
+
+## Reaching it over Ethernet
+
+Plug the Pi into a wired network and it's reachable there too. If you have a screen attached, the console login banner prints the Pi's LAN address, which saves hunting through your router. Browse to **`http://prepperpi.local/`** — that name is answered by Bonjour/avahi on every interface, so it works from a Mac, an iPhone, or a modern Windows or Linux machine without any DNS setup. Its LAN address works too (your router's DHCP list will show it as `prepperpi`).
+
+The name `prepperpi.home.arpa` only works for devices joined to the PrepperPi Wi-Fi, because that one is answered by the Pi's own DNS. Don't add it to your router or Pi-hole as a local DNS entry — the Pi answers on more than one address, and pinning the name to one of them is how you end up looking at some other machine on your network.
+
+The admin console is reachable from private network ranges only, and **has no password**. Anyone who can reach it can reconfigure the Wi-Fi, delete content, or power the device off. Treat any network you plug the Ethernet port into as trusted, or leave it unplugged.
+
 ## Content
 
 PrepperPi ships the *downloader*, never the content itself. Install through the admin console:

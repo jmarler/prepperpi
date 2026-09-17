@@ -112,6 +112,8 @@ install_files() {
                   "${DST_DIR}/apply-storage-action"
   install -m 0755 -o root -g root "${SRC_DIR}/manage-backup" \
                   "${DST_DIR}/manage-backup"
+  install -m 0755 -o root -g root "${SRC_DIR}/apply-power-action" \
+                  "${DST_DIR}/apply-power-action"
 
   # Backup helper scripts: the disaster-recovery image creator and the
   # content-tarball restore worker. Both invoked by manage-backup.

@@ -78,7 +78,19 @@
         // the URL works regardless of how the user reached the box
         // (prepperpi.home.arpa vs 10.42.0.1 vs 192.168.x.y).
         transformRequest: function (url) {
-          if (url && url.charAt(0) === "/" && url.charAt(1) !== "/") {
+          if (!url) { return { url: url }; }
+          // tileserver-gl-light rewrites glyphs/sprite to absolute
+          // URLs against --public_url, which is the portal name. That
+          // name only resolves for AP clients (our dnsmasq answers
+          // it); a browser reaching the Pi over Ethernet can't resolve
+          // it and the map silently loses its fonts and icons. Re-point
+          // anything on that origin at whatever origin actually served
+          // this page.
+          var PORTAL = "http://prepperpi.home.arpa";
+          if (url.indexOf(PORTAL + "/") === 0) {
+            return { url: window.location.origin + url.slice(PORTAL.length) };
+          }
+          if (url.charAt(0) === "/" && url.charAt(1) !== "/") {
             return { url: window.location.origin + url };
           }
           return { url: url };

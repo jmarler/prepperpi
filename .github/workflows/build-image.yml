@@ -1,7 +1,9 @@
 name: Build SD image
 
-# Manual trigger for now. Tag-triggered release publishing arrives in
-# E7-S2 (CI and release pipeline) along with GPG signing.
+# Manual builds only, for testing a change to the image without cutting
+# a release. The real release path is `release.yml`, which fires on a
+# `v*` tag and additionally signs the artifacts and publishes a GitHub
+# Release. If you want a release image, push a tag -- don't run this.
 on:
   workflow_dispatch:
     inputs:

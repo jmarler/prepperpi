@@ -96,13 +96,35 @@
 
 		# ---- 2 (admin). Admin console ----
 		# /admin and /admin/* reverse-proxy to the FastAPI app on
-		# 127.0.0.1:8090. The admin console is reachable only from
-		# the AP subnet or the device itself; we enforce that here at
-		# the Caddy layer so the unprivileged uvicorn never even sees
-		# off-subnet requests.
+		# 127.0.0.1:8090. Reachable from private address space only;
+		# we enforce that here at the Caddy layer so the unprivileged
+		# uvicorn never even sees a request from off-net.
 		@admin path /admin /admin/*
 		handle @admin {
-			@admin_allowed remote_ip 10.42.0.0/24 127.0.0.1/32 ::1/128
+			# RFC 1918 + RFC 4193 + loopback + link-local. This covers
+			# the AP subnet (10.42.0.0/24 is inside 10/8) plus whatever
+			# LAN the Ethernet port is plugged into, so the console is
+			# reachable from a wired workstation -- the admin console is
+			# how you shut the appliance down, and requiring a Wi-Fi hop
+			# to do that was the wrong trade.
+			#
+			# Spelled out rather than using Caddy's `private_ranges`
+			# shorthand. Both work (verified on 2.6.2, the Bookworm
+			# package, and on 2.8.4), but the shorthand's membership is
+			# Caddy's to change between versions -- and this list is the
+			# entire access-control boundary for an unauthenticated
+			# console. What it covers should be reviewable here, not in
+			# release notes.
+			#
+			# Note what this does NOT do: the console still has no
+			# authentication, so anyone on the wired LAN can reconfigure
+			# the AP, delete content, restore backups, or power the Pi
+			# off. Restricting to private space is the one guard left --
+			# a Pi that ever ends up with a public address still won't
+			# serve /admin to the internet.
+			@admin_allowed remote_ip 10.0.0.0/8 172.16.0.0/12 \
+				192.168.0.0/16 127.0.0.1/32 ::1/128 \
+				fc00::/7 fe80::/10
 			handle @admin_allowed {
 				# Clickjack / MIME / referrer hardening.
 				# DENY blocks iframe embedding entirely; nosniff stops
@@ -113,7 +135,7 @@
 				header Referrer-Policy "same-origin"
 				reverse_proxy 127.0.0.1:8090
 			}
-			respond "Forbidden — admin console is reachable only from the PrepperPi Wi-Fi network." 403 {
+			respond "Forbidden — the admin console is reachable only from the PrepperPi Wi-Fi network or the local network the Pi is plugged into." 403 {
 				close
 			}
 		}
@@ -234,7 +256,38 @@
 		# captive flow. `.home.arpa` (RFC 8375) is a real unicast
 		# DNS name -- iOS / Android resolve it through DHCP DNS,
 		# no mDNS required, which is why we prefer it over `.local`.
-		@offhost not host prepperpi.home.arpa
+		#
+		# Two conditions, ANDed, and both are load-bearing. We bounce
+		# ONLY when the client both (a) arrived on a name that isn't a
+		# legitimate way to reach us, and (b) is on the AP subnet,
+		# where prepperpi.home.arpa actually resolves.
+		#
+		# (a) The host exemption list. prepperpi.home.arpa only resolves
+		# via our dnsmasq, but it is not the only correct name for this
+		# box: `prepperpi.local` and the bare `prepperpi` are answered
+		# by avahi/Bonjour on EVERY interface, including Ethernet, and
+		# are how a laptop actually finds the Pi on a wired LAN.
+		# Redirecting those to prepperpi.home.arpa took a request that
+		# had already reached us and threw it at a name the client
+		# usually can't resolve. Anything genuinely off-host (a
+		# DNS-hijacked probe domain like captive.apple.com, or a typed
+		# bbc.com) is still bounced, so the captive-portal flow is
+		# unchanged.
+		#
+		# (b) The remote_ip condition. Bouncing a wired LAN client to
+		# prepperpi.home.arpa sent it to its own router's DNS, which
+		# answers NXDOMAIN -- or, where someone has added a local DNS
+		# entry for that name, whatever host that entry points at.
+		# That's the "I get a default Apache page over Ethernet"
+		# report: we redirected the browser off the Pi entirely and
+		# something else on the network answered.
+		#
+		# Everything not matching falls through to the landing page
+		# below and is served at whatever address the client used.
+		@offhost {
+			not host prepperpi.home.arpa prepperpi.local prepperpi
+			remote_ip 10.42.0.0/24
+		}
 		handle @offhost {
 			redir http://prepperpi.home.arpa{uri} 302
 		}

@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""apply-power-action — privileged worker, invoked via sudo by the
+prepperpi-admin FastAPI app.
+
+Reads a JSON spec from stdin and performs one of:
+  {"action": "poweroff"}
+  {"action": "reboot"}
+  {"action": "set-button", "enabled": true, "gpio": 3}
+  {"action": "set-button", "enabled": false}
+
+`poweroff` / `reboot` are *deferred* by DEFER_SECONDS via a transient
+systemd timer rather than run inline. The admin console has no second
+channel to tell the operator "it worked" -- if we halted synchronously,
+uvicorn would die mid-response and the browser would show a connection
+error on the one action where a scary error message is least welcome.
+The deferral lets the confirmation page render first. systemd-run also
+puts the scheduled unit in the journal, so a shutdown that someone
+didn't expect is attributable after the fact.
+
+`set-button` rewrites a delimited block in /boot/firmware/config.txt to
+enable the kernel's `gpio-shutdown` overlay. That overlay makes the
+firmware emit KEY_POWER on a falling edge, which systemd-logind turns
+into a clean shutdown -- no daemon of ours in the path, so the button
+still works if every PrepperPi service is dead. Takes effect on the
+next boot (config.txt is read by the firmware at boot only).
+
+Same trust-boundary contract as apply-network-config: treat the
+FastAPI process as untrusted. Re-validate every field; ignore argv.
+"""
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+CONFIG_TXT_CANDIDATES = (
+    Path("/boot/firmware/config.txt"),
+    Path("/boot/config.txt"),
+)
+
+# Hard cap on the JSON payload we'll read from stdin. Mirrors the
+# cap in apply-network-config; same rationale.
+MAX_STDIN_BYTES = 1 << 20  # 1 MiB
+
+# Grace period between "operator clicked the button" and the halt.
+# Long enough for the 303 + confirmation page to render over the AP's
+# 2.4 GHz link, short enough that nobody thinks it didn't take.
+DEFER_SECONDS = 5
+
+BLOCK_BEGIN = "# >>> prepperpi power button (managed) >>>"
+BLOCK_END = "# <<< prepperpi power button (managed) <<<"
+
+# Header pins that are safe to offer as a shutdown trigger. Excludes
+# pins with a dedicated boot-time or power role (GPIO 14/15 are the
+# UART console; 0/1 are the HAT ID EEPROM and must stay alone).
+#
+# GPIO3 is the default because it is the *only* pin that also wakes a
+# halted Pi -- shorting header pins 5 and 6 boots a Pi that has been
+# powered off via `poweroff`, so one momentary button serves as both
+# off and on. Its cost is that it doubles as I2C1 SCL, which is why
+# enabling the overlay is opt-in rather than shipped on.
+ALLOWED_GPIOS = frozenset({3, 4, 5, 6, 12, 13, 16, 17, 22, 23, 24, 25, 26, 27})
+DEFAULT_GPIO = 3
+
+# Debounce in milliseconds. The overlay default is 100 ms, which is
+# twitchy for the kind of panel-mount button someone bolts onto a
+# field enclosure; 1 s means a deliberate press, not a knock.
+DEBOUNCE_MS = 1000
+
+
+def config_txt_path() -> Path | None:
+    for candidate in CONFIG_TXT_CANDIDATES:
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def validate_set_button(spec: dict) -> tuple[list[str], bool, int]:
+    errors: list[str] = []
+    enabled = spec.get("enabled")
+    if not isinstance(enabled, bool):
+        errors.append("enabled: must be true or false")
+        return errors, False, DEFAULT_GPIO
+
+    if not enabled:
+        # No pin needed to turn it off; ignore whatever was sent.
+        return errors, False, DEFAULT_GPIO
+
+    gpio = spec.get("gpio", DEFAULT_GPIO)
+    # Reject bools explicitly: `True` is an int in Python and would
+    # otherwise sail through as GPIO 1.
+    if isinstance(gpio, bool) or not isinstance(gpio, int):
+        errors.append("gpio: must be an integer")
+        return errors, enabled, DEFAULT_GPIO
+    if gpio not in ALLOWED_GPIOS:
+        allowed = ", ".join(str(g) for g in sorted(ALLOWED_GPIOS))
+        errors.append(f"gpio: must be one of {allowed}")
+        return errors, enabled, DEFAULT_GPIO
+
+    return errors, enabled, gpio
+
+
+def strip_block(text: str) -> str:
+    """Remove a previously-written managed block, if present.
+
+    Tolerates a truncated block (begin marker with no end) by dropping
+    everything from the begin marker to EOF -- a half-written block
+    left by a power loss mid-write must not survive and accumulate.
+    """
+    lines = text.splitlines(keepends=True)
+    out: list[str] = []
+    inside = False
+    for line in lines:
+        if line.strip() == BLOCK_BEGIN:
+            inside = True
+            continue
+        if inside:
+            if line.strip() == BLOCK_END:
+                inside = False
+            continue
+        out.append(line)
+    return "".join(out)
+
+
+def render_block(gpio: int) -> str:
+    return (
+        f"{BLOCK_BEGIN}\n"
+        "# Written by the PrepperPi admin console (Power page). Edits\n"
+        "# inside this block are overwritten; put your own settings\n"
+        "# outside it. Delete the whole block to disable the button.\n"
+        f"dtoverlay=gpio-shutdown,gpio_pin={gpio},active_low=1,"
+        f"gpio_pull=up,debounce={DEBOUNCE_MS}\n"
+        f"{BLOCK_END}\n"
+    )
+
+
+def write_config_txt(path: Path, enabled: bool, gpio: int) -> None:
+    """Rewrite config.txt with the managed block added or removed.
+
+    Writes to a temp file in the same directory and renames, so a power
+    loss mid-write leaves the old config.txt intact rather than a
+    truncated one -- a corrupt config.txt is an unbootable Pi, and the
+    operator flipping this switch may well be about to cut the power.
+    """
+    original = path.read_text(encoding="utf-8", errors="surrogateescape")
+    body = strip_block(original)
+
+    if enabled:
+        if body and not body.endswith("\n"):
+            body += "\n"
+        body += render_block(gpio)
+
+    if body == original:
+        return
+
+    tmp = path.with_name(path.name + ".prepperpi-tmp")
+    try:
+        tmp.write_text(body, encoding="utf-8", errors="surrogateescape")
+        # Best-effort mode match. /boot/firmware is vfat, where the mode
+        # comes from the mount's fmask and chmod is refused outright --
+        # failing the whole write over a mode we can't set anyway would
+        # mean the button could never be enabled on a stock image.
+        try:
+            tmp.chmod(path.stat().st_mode & 0o777)
+        except OSError:
+            pass
+        tmp.replace(path)
+    except OSError:
+        # Don't leave a stray config.txt.prepperpi-tmp on the boot
+        # partition for someone to find later and wonder about.
+        tmp.unlink(missing_ok=True)
+        raise
+
+    # vfat has no journal. Without an explicit sync the rename can sit
+    # in the page cache, and the operator's very next action is often
+    # "pull the power" -- which would silently lose the change.
+    subprocess.run(["sync", "-f", str(path)], check=False, timeout=10)
+
+
+def emit_event(event_type: str, message: str) -> None:
+    """Best-effort breadcrumb in the shared event ring so the dashboard
+    shows why the box went down. Never fatal -- a missing emitter must
+    not block a shutdown the operator asked for."""
+    emitter = Path("/opt/prepperpi/services/prepperpi-events/emit-event.py")
+    if not emitter.is_file():
+        return
+    try:
+        subprocess.run(
+            [str(emitter), event_type, message],
+            check=False,
+            timeout=10,
+            capture_output=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def schedule_halt(action: str) -> None:
+    """Defer `systemctl poweroff|reboot` by DEFER_SECONDS.
+
+    `systemd-run --on-active` creates a transient timer; we name the
+    unit so a second click replaces the first rather than stacking two
+    timers (systemd-run fails on a duplicate unit name, which surfaces
+    to the operator as "already scheduled" instead of a silent double).
+    """
+    verb = "poweroff" if action == "poweroff" else "reboot"
+    subprocess.run(
+        [
+            "systemd-run",
+            f"--on-active={DEFER_SECONDS}",
+            f"--unit=prepperpi-{verb}",
+            "--timer-property=AccuracySec=100ms",
+            "--description=PrepperPi operator-requested power action",
+            "systemctl",
+            verb,
+        ],
+        check=True,
+        timeout=15,
+        capture_output=True,
+    )
+
+
+def do_halt(action: str) -> int:
+    human = "Shutting down" if action == "poweroff" else "Rebooting"
+    emit_event(
+        "power",
+        f"{human} on request from the admin console "
+        f"(in {DEFER_SECONDS}s)",
+    )
+    try:
+        schedule_halt(action)
+    except subprocess.CalledProcessError as exc:
+        stderr = (exc.stderr or b"").decode("utf-8", "replace").strip()
+        # systemd's wording for a name collision is "Unit <x>.timer was
+        # already loaded or has a fragment file" -- not "already exists",
+        # which is what this originally matched on. Verified against
+        # systemd 257 on Pi OS Trixie; match the stable part only.
+        if "already loaded" in stderr.lower() or "already exists" in stderr.lower():
+            sys.stderr.write(
+                f"a {action} is already scheduled; it will happen shortly\n"
+            )
+            return 1
+        sys.stderr.write(f"could not schedule {action}: {stderr or exc}\n")
+        return 1
+    except subprocess.SubprocessError as exc:
+        sys.stderr.write(f"could not schedule {action}: {exc}\n")
+        return 1
+    sys.stdout.write(f"{action} scheduled in {DEFER_SECONDS}s\n")
+    return 0
+
+
+def do_set_button(spec: dict) -> int:
+    errors, enabled, gpio = validate_set_button(spec)
+    if errors:
+        for e in errors:
+            sys.stderr.write(f"error: {e}\n")
+        return 2
+
+    path = config_txt_path()
+    if path is None:
+        sys.stderr.write(
+            "config.txt not found under /boot/firmware or /boot; "
+            "is this a Raspberry Pi?\n"
+        )
+        return 1
+
+    try:
+        write_config_txt(path, enabled, gpio)
+    except OSError as exc:
+        sys.stderr.write(f"could not write {path}: {exc}\n")
+        return 1
+
+    if enabled:
+        emit_event("power", f"Physical power button enabled on GPIO{gpio}")
+        sys.stdout.write(f"power button enabled on GPIO{gpio}\n")
+    else:
+        emit_event("power", "Physical power button disabled")
+        sys.stdout.write("power button disabled\n")
+    return 0
+
+
+def main() -> int:
+    # Refuse TTY stdin (confused-deputy) and cap the payload size so a
+    # caller can't wedge us by holding the pipe open. Same contract as
+    # apply-network-config.
+    if sys.stdin.isatty():
+        sys.stderr.write("refusing to read JSON payload from a TTY\n")
+        return 2
+    try:
+        raw = sys.stdin.read(MAX_STDIN_BYTES + 1)
+        if len(raw) > MAX_STDIN_BYTES:
+            sys.stderr.write(f"payload exceeds {MAX_STDIN_BYTES} bytes\n")
+            return 2
+        spec = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        sys.stderr.write(f"invalid JSON on stdin: {exc}\n")
+        return 2
+    if not isinstance(spec, dict):
+        sys.stderr.write("payload must be a JSON object\n")
+        return 2
+
+    action = spec.get("action")
+    if action in ("poweroff", "reboot"):
+        return do_halt(action)
+    if action == "set-button":
+        return do_set_button(spec)
+
+    sys.stderr.write(f"unknown action: {action!r}\n")
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

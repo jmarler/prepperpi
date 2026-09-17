@@ -9,6 +9,13 @@
 # with your own public key and save. Everything else has a sensible
 # default.
 #
+# IMPORTANT -- this file is read ONCE, on the first boot of a given
+# instance. Editing it after the Pi has already booted does nothing on
+# its own: cloud-init compares `instance_id` in `meta-data` against a
+# cached copy and skips everything if it hasn't changed. To make an
+# edit take effect on an already-booted card, also change `instance_id`
+# in `meta-data` to any new value. See the boot-partition README.
+#
 # Fields are standard cloud-init cloud-config; see
 # https://cloudinit.readthedocs.io/en/latest/reference/modules.html
 # for the full reference.
@@ -30,14 +37,25 @@ users:
     # or ssh-rsa line(s) -- one per list entry.
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEREPLACEME your@laptop
-    # Lock password login so only the pubkey works. Comment this line
-    # to keep the default `prepperpi` password as a fallback (useful
-    # for console debugging, awful for anything on a real network).
-    lock_passwd: true
+    # Password login stays ENABLED by default, on purpose. If the key
+    # above has a typo, a stray newline, or is still the placeholder,
+    # locking the password here is a complete lockout: no SSH (bad key)
+    # and no console login (locked password). Recovering from that means
+    # pulling the card and editing it on another machine.
+    #
+    # Flip this to `true` only AFTER you have confirmed the key works:
+    #     ssh -i ~/.ssh/your-key prepper@prepperpi.local
+    # Leaving it false keeps the well-known `prepperpi` password, which
+    # is fine on a bench and wrong on any shared network.
+    lock_passwd: false
 
 # Turn on SSH. pi-gen's ENABLE_SSH=0 default keeps it off unless
 # cloud-init or an `ssh` marker file says otherwise.
-ssh_pwauth: false
+#
+# Set to false to refuse password auth once your key is proven. Paired
+# with lock_passwd above -- change both together, and only after a
+# successful key login.
+ssh_pwauth: true
 runcmd:
   - systemctl enable ssh
   - systemctl start ssh

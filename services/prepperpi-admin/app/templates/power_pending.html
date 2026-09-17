@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{% if action == "poweroff" %}Shutting down{% else %}Restarting{% endif %} · PrepperPi{% endblock %}
+{% block content %}
+{#
+  Terminal page: the Pi halts a few seconds after this renders, so
+  everything the operator needs has to be on it already. No polling,
+  no "click here when it's done" — there will be nothing to answer.
+#}
+{% if action == "poweroff" %}
+<h2 class="admin-page__title">Shutting down…</h2>
+
+<div class="power-pending" role="status">
+	<p class="power-pending__lead">PrepperPi is shutting down now. This takes about 20 seconds.</p>
+
+	<ol class="power-pending__steps">
+		<li>Watch the <strong>green light</strong> on the Pi. It will flicker while
+			the Pi finishes writing to the SD card.</li>
+		<li>When the green light <strong>stops blinking and stays off</strong>,
+			the Pi has halted. Only the red power light will still be lit.</li>
+		<li>It is now safe to <strong>unplug the power</strong>.</li>
+	</ol>
+
+	<p class="power-pending__note">
+		This page won't update — the Pi is going away. The Wi-Fi network will
+		disappear in a few seconds, which is the other sign that it worked.
+	</p>
+
+	<p class="power-pending__note">
+		To start it up again, plug the power back in. It takes two to three
+		minutes before the PrepperPi Wi-Fi network reappears.
+	</p>
+</div>
+{% else %}
+<h2 class="admin-page__title">Restarting…</h2>
+
+<div class="power-pending" role="status">
+	<p class="power-pending__lead">PrepperPi is restarting now.</p>
+
+	<ol class="power-pending__steps">
+		<li>The PrepperPi Wi-Fi network will disappear shortly.</li>
+		<li>Wait two to three minutes, then reconnect to it from your Wi-Fi settings.</li>
+		<li>Open any web address and the portal will come back.</li>
+	</ol>
+
+	<p class="power-pending__note">
+		This page won't update on its own — the Pi is restarting. Don't unplug
+		it while it's coming back up.
+	</p>
+</div>
+{% endif %}
+{% endblock %}

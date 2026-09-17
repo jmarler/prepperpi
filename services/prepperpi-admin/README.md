@@ -8,6 +8,7 @@ Browser-based admin console for PrepperPi. FastAPI + Jinja2 + uvicorn behind Cad
 - **Content catalog** — browse the Kiwix library, filter by language/topic/size/name, queue downloads via [`prepperpi-aria2c`](../prepperpi-aria2c/). Pause / resume / cancel / clear in place. Downloads land in `/srv/prepperpi/zim/` (SD card). The metalink is parsed admin-side and the direct mirror URLs are handed to aria2 — keeps each download to one GID for clean pause/resume semantics.
 - **Offline maps** — list installed map regions and delete one with a single button. **Pick a country (or one-click bundle: NA / LATAM / EU / EMEA / APAC / Oceania / Russia / Antarctica) from the catalog and the admin spawns a [`pmtiles extract`](https://github.com/protomaps/go-pmtiles) job that streams just that region's tiles directly out of the [mapterhorn.com daily planet PMTiles](https://download.mapterhorn.com/) over HTTP range requests.** One install at a time (lock file at `/srv/prepperpi/maps/.lock`). Browser-side queue runs bundle members one after the other. Region metadata (name, bounds, zoom range, total size) comes from the reindex service in [`prepperpi-tiles`](../prepperpi-tiles/). Delete is plain `unlink()` — `/srv/prepperpi/maps/` is owned by the admin user.
 - **Content bundles** — curated YAML manifests (Kiwix ZIMs + map regions + optional static files) installable in one click. The image ships builtin copies of the [official bundles](https://github.com/jmarler/prepperpi-bundles); when online, the admin can refresh from configured source URLs (default: official) or add community-managed sources. ZIMs go through aria2's existing queue; map regions append to a server-side queue drained by [`bundle-region-installer.py`](bundle-region-installer.py) which calls `extract-region.sh` sequentially. Schema and contributor guide: [`docs/creating-bundles.md`](../../docs/creating-bundles.md).
+- **Power** panel — clean shutdown and restart from the browser, so an operator can power the appliance down without a keyboard, a screen, or SSH (SSH is off by default in the prebuilt image). Also configures an optional **physical power button** on the GPIO header. The halt is deferred a few seconds so the confirmation page — which tells the operator to wait for the green LED before unplugging — renders before the Pi goes away.
 
 ## Trust model
 
@@ -71,20 +72,25 @@ Summary of the threat-model boundary as it stands now:
 
 ## Network access guard
 
-The admin console is reachable only from clients on the AP subnet (`10.42.0.0/24`) or the device itself (`127.0.0.1`, `::1`). The check lives in Caddy, not Python:
+The admin console is reachable from private (RFC 1918 / RFC 4193 / loopback / link-local) addresses only. That's the AP subnet, the device itself, and whatever LAN the Ethernet port is plugged into. The check lives in Caddy, not Python:
 
 ```caddyfile
 @admin path /admin /admin/*
 handle @admin {
-  @admin_allowed remote_ip 10.42.0.0/24 127.0.0.1/32 ::1/128
+  @admin_allowed remote_ip 10.0.0.0/8 172.16.0.0/12 \
+    192.168.0.0/16 127.0.0.1/32 ::1/128 fc00::/7 fe80::/10
   handle @admin_allowed {
     reverse_proxy 127.0.0.1:8090
   }
-  respond "Forbidden — admin console is AP-only" 403
+  respond "Forbidden — …" 403
 }
 ```
 
-Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI doesn't need to re-check the source address (and we don't want the CIDR encoded in two places that can drift).
+Because Caddy strips disallowed requests *before* they reach uvicorn, FastAPI doesn't need to re-check the source address (and we don't want the CIDR encoded in two places that can drift).
+
+**The console has no authentication.** Anyone who can reach it can rewrite the Wi-Fi config, delete content, restore a backup, or power the Pi off. The address guard is the whole access-control story, and since the Power panel landed it covers the wired LAN too — a deliberate trade for being able to shut the appliance down from a wired workstation. Treat any network you plug the Ethernet port into as trusted, or leave it unplugged.
+
+The ranges are spelled out rather than using Caddy's `private_ranges` shorthand. Both work (checked against Caddy 2.6.2, the Bookworm package, and 2.8.4), but the shorthand's membership is Caddy's to redefine between releases, and this list is the entire access-control boundary for an unauthenticated console — what it covers should be reviewable in the file, not in upstream release notes.
 
 ## Files
 
@@ -106,6 +112,10 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | `app/static/admin.js`                    | Polls `/admin/uplink` every 5 s; live-swaps the home banner. Progressive enhancement — no-JS users still see the request-time render. |
 | `apply-network-config`                   | Privileged worker for the Network panel. JSON on stdin. |
 | `apply-storage-action`                   | Privileged worker for the USB write toggle. JSON on stdin. |
+| `apply-power-action`                     | Privileged worker for shutdown / restart / GPIO-button config. JSON on stdin. |
+| `app/power.py`                           | Read-only parse of the managed `config.txt` block (physical-button state). Mirrors the worker's constants; drift is caught by `tests/unit/test_admin_power.py`. |
+| `app/templates/power.html`               | `/admin/power` — shutdown / restart buttons + GPIO-button form. |
+| `app/templates/power_pending.html`       | Terminal page shown while the deferred halt counts down. |
 | `sudoers.d-prepperpi-admin`              | Sudoers exception, dropped at `/etc/sudoers.d/`. |
 | `prepperpi-admin.service`                | uvicorn unit, sandboxed.                         |
 | `_admin.html`                            | Landing-page tile fragment.                      |
@@ -137,6 +147,11 @@ Because Caddy strips off-subnet requests *before* they reach uvicorn, FastAPI do
 | GET     | `/admin/maps/install/status` | Snapshot of the currently-running (or last-completed) extract. Polled at 1Hz when an install is in flight. |
 | POST    | `/admin/maps/install/cancel` | SIGTERM the worker. Worker's signal trap discards the partial file. |
 | POST    | `/admin/maps/{region_id}/delete` | Unlink one `.mbtiles`/`.pmtiles` and redirect 303 with a flash message. |
+| GET     | `/admin/power`             | Render the Power page (shutdown / restart / button config). |
+| POST    | `/admin/power/poweroff`    | Schedule a deferred clean shutdown, redirect 303.  |
+| POST    | `/admin/power/reboot`      | Schedule a deferred restart, redirect 303.         |
+| GET     | `/admin/power/{poweroffing,rebooting}` | Terminal "what to expect" page. Rendered before the Pi halts. |
+| POST    | `/admin/power/button`      | Enable/disable the GPIO shutdown button and pick its pin. Takes effect next boot. |
 | GET     | `/admin/static/admin.css`  | Static stylesheet.                                |
 
 Behind Caddy's `/admin/*` reverse-proxy. Static files for the landing page (`/style.css`, etc.) come from Caddy's file_server; they're under a different prefix and served directly without going through uvicorn.
@@ -154,6 +169,47 @@ echo '{"action":"set","ssid":"PrepperPi-FIELD","wifi_password":"hunter2hunter2",
 # Roll back to factory defaults
 echo '{"action":"reset"}' \
   | sudo -u prepperpi-admin sudo -n /opt/prepperpi/services/prepperpi-admin/apply-network-config
+```
+
+## Power
+
+Three ways to shut the appliance down cleanly, in order of how little equipment they need:
+
+1. **Admin console** — `/admin/power` → **Shut down**. Works from a phone on the PrepperPi Wi-Fi, or from a workstation on the wired LAN.
+2. **Physical button** — a momentary push-button across a GPIO pin and ground. Enable it on the Power page first.
+3. **Shell** — `sudo systemctl poweroff`. SSH is off by default in the prebuilt image, so this assumes you enabled it at flash time or have a keyboard attached.
+
+Wait for the green activity LED to stop blinking before unplugging.
+
+### The physical button
+
+Enabling the button writes a delimited block to `/boot/firmware/config.txt`:
+
+```
+# >>> prepperpi power button (managed) >>>
+dtoverlay=gpio-shutdown,gpio_pin=3,active_low=1,gpio_pull=up,debounce=1000
+# <<< prepperpi power button (managed) <<<
+```
+
+`gpio-shutdown` is a stock Raspberry Pi overlay. The firmware raises `KEY_POWER` on a falling edge and `systemd-logind` handles it — **nothing of ours is in that path**, so the button still works if every PrepperPi service has crashed. It also means the setting only takes effect after a reboot, because `config.txt` is read by the firmware at boot.
+
+Only the block is managed. Anything the operator put in `config.txt` outside it survives, and a hand-written `dtoverlay=gpio-shutdown` line outside the block is deliberately left alone rather than adopted.
+
+**GPIO3 (header pin 5) is the default** because it is the only pin that also *wakes* a halted Pi — the same button turns the appliance back on. Wire it to any ground pin (6, 9, 14, 20, 25, 30, 34, 39); pin 6 sits right beside it.
+
+`debounce=1000` means the press has to be held for a second or so. Verified on a Pi 4B with a momentary button: a brief tap does nothing, a deliberate hold halts the Pi. That is the intended failsafe — an accidental brush against a cased device shouldn't take the library down.
+
+**The catch with GPIO3:** it doubles as I²C1 SCL. On a build with an RTC or any other I²C board on header pins 3/5, normal bus traffic reads as button presses and shuts the Pi down at random. Pick a different pin in that case — the dropdown offers 13 alternatives, none of which can wake the Pi, but all of which shut it down.
+
+The button ships **disabled**. Enabling by default would have broken every I²C build with a symptom almost impossible for a non-technical owner to diagnose.
+
+```
+# Enable by hand (skipping the FastAPI side)
+echo '{"action":"set-button","enabled":true,"gpio":3}' \
+  | sudo -n /opt/prepperpi/services/prepperpi-admin/apply-power-action
+
+# Check what's scheduled after clicking Shut down
+systemctl list-timers prepperpi-poweroff
 ```
 
 ## Debugging

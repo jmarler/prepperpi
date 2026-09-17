@@ -51,10 +51,12 @@ generate_ssl() {
   install -d -m 0755 "$SSL_DIR"
   # Regenerate if the cert is missing OR doesn't include our current
   # friendly name in SAN (covers in-place upgrades that change the
-  # hostname layout).
+  # hostname layout). The probe grepped for here must be the NEWEST
+  # name in the SAN set -- grepping for an older one would let an
+  # upgraded install keep a cert that predates the addition.
   if [[ -s "$SSL_CERT" && -s "$SSL_KEY" ]] \
      && openssl x509 -in "$SSL_CERT" -noout -text 2>/dev/null \
-        | grep -q "DNS:prepperpi.home.arpa"; then
+        | grep -q "DNS:prepperpi.local"; then
     log "reusing existing self-signed cert at ${SSL_CERT}"
     return 0
   fi
@@ -62,7 +64,7 @@ generate_ssl() {
   openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
     -keyout "$SSL_KEY" -out "$SSL_CERT" \
     -subj "/CN=PrepperPi" \
-    -addext "subjectAltName=IP:10.42.0.1,DNS:prepperpi,DNS:prepperpi.home.arpa" \
+    -addext "subjectAltName=IP:10.42.0.1,DNS:prepperpi,DNS:prepperpi.home.arpa,DNS:prepperpi.local" \
     >/dev/null 2>&1
   # caddy user needs read access.
   chown root:caddy "$SSL_KEY" "$SSL_CERT"
